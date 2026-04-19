@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ha-simple-mcp"
-version = "0.1.0"
+version = "0.1.1"
 description = "Home Assistant HACS adapter for external ha-api-mcp package."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
   "aiohttp>=3.10.0",
-  "ha-api-mcp @ git+https://github.com/slavonnet/ha-api-mcp.git@v0.1.0",
+  "ha-api-mcp @ git+https://github.com/slavonnet/ha-api-mcp.git@v0.1.1",
 ]
 classifiers = [
   "Programming Language :: Python :: 3",
