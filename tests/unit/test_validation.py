@@ -1,5 +1,5 @@
-from custom_components.ha_simple_mcp.models import ApiEndpoint, ApiParameter
-from custom_components.ha_simple_mcp.validation import ValidationError, validate_call
+from ha_simple_mcp.models import ApiEndpoint, ApiParameter
+from ha_simple_mcp.validation import ValidationError, matches_type, validate_call
 
 
 def _endpoint() -> ApiEndpoint:
@@ -31,7 +31,7 @@ def test_validate_call_missing_required() -> None:
     except ValidationError as err:
         assert "missing required parameters: entity_id" in str(err)
     else:
-        assert False, "ValidationError expected"
+        raise AssertionError("ValidationError expected")
 
 
 def test_validate_call_unknown_parameter() -> None:
@@ -40,4 +40,47 @@ def test_validate_call_unknown_parameter() -> None:
     except ValidationError as err:
         assert "unknown parameters: foo" in str(err)
     else:
-        assert False, "ValidationError expected"
+        raise AssertionError("ValidationError expected")
+
+
+def test_matches_type_variants() -> None:
+    assert matches_type("string", "x")
+    assert matches_type("integer", 1)
+    assert not matches_type("integer", True)
+    assert not matches_type("string", 1)
+    assert matches_type("number", 1.2)
+    assert not matches_type("number", True)
+    assert matches_type("boolean", False)
+    assert not matches_type("boolean", 0)
+    assert matches_type("array", [1, 2])
+    assert not matches_type("array", {"a": 1})
+    assert matches_type("object", {"a": 1})
+    assert not matches_type("object", [])
+    assert matches_type("unknown", object())
+
+
+def test_validate_call_requires_object_arguments() -> None:
+    try:
+        validate_call(_endpoint(), [])  # type: ignore[arg-type]
+    except ValidationError as err:
+        assert "arguments must be an object" in str(err)
+    else:
+        raise AssertionError("ValidationError expected")
+
+
+def test_validate_call_type_mismatch_detected() -> None:
+    try:
+        validate_call(_endpoint(), {"entity_id": 123})
+    except ValidationError as err:
+        assert "invalid parameter 'entity_id' type: expected string" in str(err)
+    else:
+        raise AssertionError("ValidationError expected")
+
+
+def test_validate_call_non_dict_arguments() -> None:
+    try:
+        validate_call(_endpoint(), "bad")  # type: ignore[arg-type]
+    except ValidationError as err:
+        assert "arguments must be an object" in str(err)
+    else:
+        raise AssertionError("ValidationError expected")

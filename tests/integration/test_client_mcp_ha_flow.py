@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
+import pytest
 from aiohttp import ClientSession, web
 from aiohttp.test_utils import TestServer
 
-import pytest
-
-from custom_components.ha_simple_mcp.models import ApiEndpoint, ApiParameter, McpSettings
-from custom_components.ha_simple_mcp.proxy import ApiProxy
-from custom_components.ha_simple_mcp.schema import SchemaCache
-from custom_components.ha_simple_mcp.server import McpHttpServer
+from ha_simple_mcp.models import ApiEndpoint, ApiParameter, McpSettings
+from ha_simple_mcp.proxy import ApiProxy
+from ha_simple_mcp.schema import SchemaCache
+from ha_simple_mcp.server import McpHttpServer
 
 
 class _Catalog:
@@ -87,6 +86,10 @@ async def test_end_to_end_client_to_ha_mock(aiohttp_unused_port):
 
     base = f"http://127.0.0.1:{settings.port}"
     async with ClientSession() as session:
+        health_resp = await session.get(f"{base}/health")
+        assert health_resp.status == 200
+        assert (await health_resp.json())["status"] == "ok"
+
         tools_resp = await session.get(f"{base}/mcp/tools")
         assert tools_resp.status == 200
         tools_payload = await tools_resp.json()

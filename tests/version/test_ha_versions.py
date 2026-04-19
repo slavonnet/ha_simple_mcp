@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from custom_components.ha_simple_mcp.catalog import _build_scope
-from custom_components.ha_simple_mcp.models import ApiEndpoint
-from custom_components.ha_simple_mcp.schema import build_tools_schema
+from ha_simple_mcp.catalog import build_scope
+from ha_simple_mcp.models import ApiEndpoint
+from ha_simple_mcp.schema import build_tools_schema
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
@@ -35,7 +35,7 @@ def test_schema_generation_for_ha_release_fixture(
             path=route["path"],
             description=f"{fixture_name} {route['method']} {route['path']}",
             returns_description="json",
-            scope=_build_scope(route["method"], route["path"]),
+            scope=build_scope(route["method"], route["path"]),
         )
         for route in routes
     ]

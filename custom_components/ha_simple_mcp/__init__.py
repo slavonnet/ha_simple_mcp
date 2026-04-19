@@ -15,11 +15,20 @@ from .const import DOMAIN
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
+
     from .runtime import RuntimeData
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up one config entry."""
+    """Set up one integration config entry.
+
+    Args:
+        hass: Home Assistant runtime object.
+        entry: Config entry with persisted integration settings.
+
+    Returns:
+        True when runtime objects are initialized and MCP server is started.
+    """
     from .runtime import RuntimeData
 
     runtime = RuntimeData.from_entry(hass, entry)
@@ -29,7 +38,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload one config entry."""
+    """Unload one integration config entry.
+
+    Args:
+        hass: Home Assistant runtime object.
+        entry: Config entry being unloaded.
+
+    Returns:
+        True when MCP runtime is stopped and detached from `hass.data`.
+    """
     domain_data: MutableMapping[str, RuntimeData] = hass.data[DOMAIN]
     runtime = domain_data.pop(entry.entry_id)
     await runtime.stop()

@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 import voluptuous as vol
-
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 
@@ -25,6 +24,7 @@ from .const import (
     DEFAULT_TIMEOUT,
     DOMAIN,
 )
+from .models import normalize_scope_list
 
 
 def _normalize_scope(value: str) -> list[str]:
@@ -32,7 +32,7 @@ def _normalize_scope(value: str) -> list[str]:
     if not value.strip():
         return []
     chunks = [part.strip() for part in value.split(",")]
-    return sorted({part for part in chunks if part})
+    return normalize_scope_list(chunks)
 
 
 class HaSimpleMcpConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):

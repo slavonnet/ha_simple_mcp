@@ -7,7 +7,12 @@ from dataclasses import dataclass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .catalog import ApiCatalog
+from ha_simple_mcp.catalog import ApiCatalog
+from ha_simple_mcp.models import McpSettings
+from ha_simple_mcp.proxy import ApiProxy
+from ha_simple_mcp.schema import SchemaCache
+from ha_simple_mcp.server import McpHttpServer
+
 from .const import (
     CONF_BIND_ADDRESS,
     CONF_PORT,
@@ -23,10 +28,6 @@ from .const import (
     DEFAULT_SCHEMA_CACHE_TTL,
     DEFAULT_TIMEOUT,
 )
-from .models import McpSettings
-from .proxy import ApiProxy
-from .schema import SchemaCache
-from .server import McpHttpServer
 
 
 @dataclass(slots=True)
@@ -38,7 +39,7 @@ class RuntimeData:
     mcp_server: McpHttpServer
 
     @classmethod
-    def from_entry(cls, hass: HomeAssistant, entry: ConfigEntry) -> "RuntimeData":
+    def from_entry(cls, hass: HomeAssistant, entry: ConfigEntry) -> RuntimeData:
         """Create runtime data from config entry."""
         data = entry.data
         base_url = _resolve_base_url(hass)
