@@ -48,18 +48,39 @@ jobs:
           target_version = suffix
 
           pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
-          project_version = pyproject["project"]["version"]
+          dynamic_version_enabled = "version" in pyproject["project"].get("dynamic", [])
+          project_version = pyproject["project"].get("version")
           manifest = json.loads(
               Path("custom_components/ha_simple_mcp/manifest.json").read_text(encoding="utf-8")
           )
           manifest_version = manifest["version"]
-
-          if project_version != target_version:
+          readme = Path("README.md").read_text(encoding="utf-8")
+          readme_match = re.search(
+              r"release tag currently used here:\s*`v(\d+\.\d+\.\d+)`",
+              readme,
+          )
+          if not readme_match:
               raise SystemExit(
-                  f"pyproject version '{project_version}' must equal release version '{target_version}'"
+                  "README.md must include 'release tag currently used here: `vX.Y.Z`'"
               )
+          readme_version = readme_match.group(1)
+
+          if dynamic_version_enabled:
+              if "version" in pyproject["project"]:
+                  raise SystemExit(
+                      "project.version must be omitted when setuptools_scm dynamic versioning is enabled"
+                  )
+          else:
+              if project_version != target_version:
+                  raise SystemExit(
+                      f"pyproject version '{project_version}' must equal release version '{target_version}'"
+                  )
           if manifest_version != target_version:
               raise SystemExit(
                   f"manifest version '{manifest_version}' must equal release version '{target_version}'"
+              )
+          if readme_version != target_version:
+              raise SystemExit(
+                  f"README version '{readme_version}' must equal release version '{target_version}'"
               )
           PY
