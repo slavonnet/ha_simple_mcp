@@ -27,6 +27,7 @@ _HA_CLIENT_ID = f"{_HA_BASE_URL}/"
 _TEST_USERNAME = "cursor-e2e"
 _TEST_PASSWORD = "cursor-e2e-pass"
 _TEST_DISPLAY_NAME = "Cursor E2E"
+_COMPOSE_PROJECT_NAME = "ha_simple_mcp_install_e2e"
 
 SettingsPayload = dict[str, int | bool | str | list[str]]
 
@@ -41,6 +42,7 @@ def test_ha_container_ui_add_integration_and_change_settings() -> None:
     compose_env = os.environ.copy()
     compose_env["HA_CONFIG_DIR"] = str(_CONFIG_DIR)
     compose_env["HA_HOST_PORT"] = str(_HA_PORT)
+    compose_env["COMPOSE_PROJECT_NAME"] = _COMPOSE_PROJECT_NAME
 
     _ensure_clean_config_dir(_CONFIG_DIR)
     _run_compose(["down", "--volumes", "--remove-orphans"], env=compose_env, check=False)
@@ -478,3 +480,5 @@ def _require_command(command: str) -> None:
     """Fail fast when required binary is not available."""
     if shutil.which(command) is None:
         raise AssertionError(f"Required command is missing: {command}")
+
+
