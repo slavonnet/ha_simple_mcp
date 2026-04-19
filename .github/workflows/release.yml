@@ -1,0 +1,73 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  validate-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate version consistency for release tag
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          import tomllib
+
+          ref_name = os.environ["GITHUB_REF_NAME"]
+          if not re.fullmatch(r"v\d+\.\d+\.\d+", ref_name):
+              raise SystemExit(f"Unsupported tag format: {ref_name}")
+
+          tag_version = ref_name.removeprefix("v")
+          pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+          project_version = pyproject["project"]["version"]
+          manifest = json.loads(
+              Path("custom_components/ha_simple_mcp/manifest.json").read_text(encoding="utf-8")
+          )
+          manifest_version = manifest["version"]
+
+          if project_version != tag_version:
+              raise SystemExit(
+                  f"pyproject version '{project_version}' does not match tag '{tag_version}'"
+              )
+          if manifest_version != tag_version:
+              raise SystemExit(
+                  f"manifest version '{manifest_version}' does not match tag '{tag_version}'"
+              )
+          PY
+
+  build-release-archive:
+    runs-on: ubuntu-latest
+    needs:
+      - validate-version
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build HACS release archive
+        run: |
+          mkdir -p dist
+          cd custom_components
+          zip -r "../dist/ha_simple_mcp.zip" "ha_simple_mcp"
+
+      - name: Upload HACS archive artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ha_simple_mcp-release
+          path: dist/ha_simple_mcp.zip
+          if-no-files-found: error
