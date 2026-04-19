@@ -1,4 +1,4 @@
-# HA Simple MCP (HACS + Python package)
+# HA Simple MCP (HACS adapter + external Python package)
 
 Home Assistant custom component that deploys an MCP-compatible server and
 bridges MCP tool calls to Home Assistant REST API endpoints.
@@ -30,18 +30,13 @@ bridges MCP tool calls to Home Assistant REST API endpoints.
 
 ## Reusable Python package
 
-Core MCP logic is available as a reusable package under `src/ha_simple_mcp`.
-This allows reuse in external projects (including `ha_fast_ai_bot`) while HACS
-integration remains a thin Home Assistant adapter layer.
+Core MCP logic is consumed from external package `ha-api-mcp` (import namespace
+`ha_api_mcp`) published from:
 
-Public package modules:
+- https://github.com/slavonnet/ha-api-mcp
+- release tag currently used here: `v0.1.0`
 
-- `ha_simple_mcp.models`
-- `ha_simple_mcp.catalog`
-- `ha_simple_mcp.schema`
-- `ha_simple_mcp.validation`
-- `ha_simple_mcp.proxy`
-- `ha_simple_mcp.server`
+The HACS integration in this repository is a thin Home Assistant adapter layer.
 
 ## Quick start
 

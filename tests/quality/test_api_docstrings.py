@@ -1,7 +1,7 @@
 """Quality gate for API documentation completeness.
 
 This test enforces that all public classes and functions exposed by the reusable
-`ha_simple_mcp` package have:
+`ha_api_mcp` package have:
 
 - object-level docstring;
 - parameter descriptions for each argument;
@@ -17,11 +17,11 @@ from types import FunctionType
 from typing import Any
 
 MODULES = [
-    "ha_simple_mcp.models",
-    "ha_simple_mcp.catalog",
-    "ha_simple_mcp.schema",
-    "ha_simple_mcp.validation",
-    "ha_simple_mcp.proxy",
+    "ha_api_mcp.models",
+    "ha_api_mcp.catalog",
+    "ha_api_mcp.schema",
+    "ha_api_mcp.validation",
+    "ha_api_mcp.proxy",
 ]
 
 

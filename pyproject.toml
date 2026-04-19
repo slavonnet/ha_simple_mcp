@@ -5,11 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ha-simple-mcp"
 version = "0.1.0"
-description = "Reusable MCP core with Home Assistant HACS adapter."
+description = "Home Assistant HACS adapter for external ha-api-mcp package."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
   "aiohttp>=3.10.0",
+  "ha-api-mcp @ git+https://github.com/slavonnet/ha-api-mcp.git@v0.1.0",
 ]
 classifiers = [
   "Programming Language :: Python :: 3",
@@ -30,18 +31,16 @@ test = [
   "pytest-cov>=5.0.0",
 ]
 
-[tool.setuptools]
-package-dir = {"" = "src"}
-
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["."]
+include = ["custom_components*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = [
   "tests",
 ]
-addopts = "--cov=src/ha_simple_mcp --cov=custom_components --cov-branch --cov-report=term-missing --cov-fail-under=100"
+addopts = "--cov=custom_components --cov-branch --cov-report=term-missing --cov-fail-under=100"
 markers = [
   "install: tests requiring docker and live install checks",
 ]
@@ -70,7 +69,7 @@ module = [
   "homeassistant",
   "homeassistant.*",
   "voluptuous",
-  "ha_simple_mcp",
-  "ha_simple_mcp.*",
+  "ha_api_mcp",
+  "ha_api_mcp.*",
 ]
 ignore_missing_imports = true

@@ -1,4 +1,4 @@
-from ha_simple_mcp.models import (
+from ha_api_mcp.models import (
     ApiEndpoint,
     ApiParameter,
     McpSettings,

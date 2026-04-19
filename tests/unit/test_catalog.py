@@ -3,8 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-
-from ha_simple_mcp.catalog import ApiCatalog, discover_api_endpoints
+from ha_api_mcp.catalog import ApiCatalog, discover_api_endpoints
 
 
 def _make_route(method: str, path: str, handler_name: str):

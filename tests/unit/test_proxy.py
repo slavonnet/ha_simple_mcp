@@ -5,9 +5,8 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from ha_simple_mcp.models import ApiEndpoint, ApiParameter, McpSettings
-from ha_simple_mcp.proxy import ApiProxy, ProxyError, build_request
+from ha_api_mcp.models import ApiEndpoint, ApiParameter, McpSettings
+from ha_api_mcp.proxy import ApiProxy, ProxyError, build_request
 
 
 def _endpoint_get() -> ApiEndpoint:
@@ -128,7 +127,7 @@ async def test_api_proxy_sets_token_and_json_for_post() -> None:
     request_cm.__aexit__ = AsyncMock(return_value=False)
     session.request = MagicMock(return_value=request_cm)
 
-    with patch("ha_simple_mcp.proxy.ClientSession", return_value=session):
+    with patch("ha_api_mcp.proxy.ClientSession", return_value=session):
         status, body = await proxy.call(endpoint, {"entity_id": "light.kitchen"})
 
     assert status == 200
@@ -168,7 +167,7 @@ async def test_api_proxy_raises_on_http_error() -> None:
     request_cm.__aexit__ = AsyncMock(return_value=False)
     session.request = MagicMock(return_value=request_cm)
 
-    with patch("ha_simple_mcp.proxy.ClientSession", return_value=session):
+    with patch("ha_api_mcp.proxy.ClientSession", return_value=session):
         with pytest.raises(ProxyError):
             await proxy.call(endpoint, {"entity_id": "light.kitchen"})
 
@@ -202,7 +201,7 @@ async def test_api_proxy_falls_back_to_text_payload() -> None:
     request_cm.__aexit__ = AsyncMock(return_value=False)
     session.request = MagicMock(return_value=request_cm)
 
-    with patch("ha_simple_mcp.proxy.ClientSession", return_value=session):
+    with patch("ha_api_mcp.proxy.ClientSession", return_value=session):
         status, body = await proxy.call(endpoint, {"entity_id": "light.kitchen"})
 
     assert status == 200
@@ -253,7 +252,7 @@ async def test_api_proxy_post_without_body_omits_json_argument() -> None:
     request_cm.__aexit__ = AsyncMock(return_value=False)
     session.request = MagicMock(return_value=request_cm)
 
-    with patch("ha_simple_mcp.proxy.ClientSession", return_value=session):
+    with patch("ha_api_mcp.proxy.ClientSession", return_value=session):
         status, body = await proxy.call(endpoint, {"domain": "light"})
 
     assert status == 200
@@ -320,6 +319,6 @@ def test_proxy_error_subclass_runtime_error() -> None:
 
 
 def test_build_request_alias_points_to_public_function() -> None:
-    from ha_simple_mcp.proxy import _build_request
+    from ha_api_mcp.proxy import _build_request
 
     assert _build_request is build_request

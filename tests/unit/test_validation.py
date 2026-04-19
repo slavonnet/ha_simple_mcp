@@ -1,5 +1,5 @@
-from ha_simple_mcp.models import ApiEndpoint, ApiParameter
-from ha_simple_mcp.validation import ValidationError, matches_type, validate_call
+from ha_api_mcp.models import ApiEndpoint, ApiParameter
+from ha_api_mcp.validation import ValidationError, matches_type, validate_call
 
 
 def _endpoint() -> ApiEndpoint:
