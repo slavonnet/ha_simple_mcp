@@ -52,6 +52,14 @@ This repository uses a **release-via-PR** workflow.
    Tag push triggers `Release` workflow:
    - validates that tag matches versions in files
    - builds `dist/ha_simple_mcp.zip` artifact for HACS release
+   - publishes `ha_simple_mcp.zip` as GitHub Release asset
+
+7. If release asset is missing, re-run publication manually:
+
+   - Go to **Actions -> Release -> Run workflow**
+   - Pass tag in input `tag` (for example `v0.1.2`)
+   - Workflow checks out that tag, validates versions, and re-publishes
+     `ha_simple_mcp.zip` into the selected release
 
 ## HACS versioned mode
 
