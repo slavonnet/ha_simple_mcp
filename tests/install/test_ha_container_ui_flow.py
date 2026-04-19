@@ -39,6 +39,8 @@ def test_ha_container_ui_add_integration_and_change_settings() -> None:
         pytest.skip("Set RUN_INSTALL_TESTS=1 to run Docker-based install E2E tests")
     if shutil.which("docker") is None:
         pytest.skip("Docker CLI is required for install E2E tests")
+    if shutil.which("wget") is None:
+        pytest.skip("wget is required for UI user-case checks")
 
     compose_env = os.environ.copy()
     compose_env["HA_CONFIG_DIR"] = str(_CONFIG_DIR)
@@ -53,11 +55,9 @@ def test_ha_container_ui_add_integration_and_change_settings() -> None:
         auth_code = _create_onboarding_user()
         access_token = _exchange_auth_code(auth_code)
         _finish_onboarding(access_token)
-        _assert_ui_shell_pages_exist_with_wget(access_token)
 
         entry_id = _create_integration_entry(access_token)
-        _assert_component_settings_available_with_wget(access_token, entry_id)
-        updated = _update_integration_options(access_token, entry_id)
+        updated = _walk_user_case_to_settings_with_wget(access_token, entry_id)
 
         data = cast(SettingsPayload, updated["data"])
         assert data["listen_host"] == "127.0.0.1"
@@ -242,40 +242,56 @@ def _auth_headers(access_token: str) -> dict[str, str]:
     }
 
 
-def _assert_ui_shell_pages_exist_with_wget(access_token: str) -> None:
-    """Ensure HA UI pages are reachable and contain HTML shell."""
+def _walk_user_case_to_settings_with_wget(
+    access_token: str,
+    entry_id: str,
+) -> dict[str, Any]:
+    """Go from main UI to integration settings and save options via wget."""
+    _assert_wget_html_page(f"{_HA_BASE_URL}/", access_token=access_token)
+    _assert_wget_html_page(f"{_HA_BASE_URL}/config/dashboard", access_token=access_token)
     _assert_wget_html_page(
         f"{_HA_BASE_URL}/config/integrations/dashboard",
         access_token=access_token,
     )
     _assert_wget_html_page(
-        f"{_HA_BASE_URL}/config/integrations",
+        f"{_HA_BASE_URL}/config/integrations/integration/{entry_id}",
         access_token=access_token,
     )
 
-
-def _assert_component_settings_available_with_wget(access_token: str, entry_id: str) -> None:
-    """Validate backend UI metadata says settings button should be shown."""
     details_url = f"{_HA_BASE_URL}/api/config/config_entries/entry/{entry_id}"
-    cmd = [
-        "wget",
-        "-q",
-        "--timeout=15",
-        "-O",
-        "-",
-        "--header",
-        f"Authorization: Bearer {access_token}",
-        details_url,
-    ]
-    result = _run_command(cmd)
-    data = json.loads(result.stdout)
-    if not isinstance(data, dict):
-        raise AssertionError("Config entry details payload must be JSON object")
-    supports_options = data.get("supports_options", False)
-    if supports_options is not True:
+    data = _wget_json_request("GET", details_url, access_token=access_token)
+    if data.get("supports_options") is not True:
         raise AssertionError(
             "Expected supports_options=true for component settings button visibility"
         )
+
+    start = _wget_json_request(
+        "POST",
+        f"{_HA_BASE_URL}/api/config/config_entries/options/flow",
+        access_token=access_token,
+        json_payload={"handler": entry_id},
+    )
+    flow_id = str(start["flow_id"])
+
+    update_payload = {
+        "listen_host": "127.0.0.1",
+        "listen_port": 8126,
+        "auth_token": "changed-token",
+        "ha_user": _TEST_DISPLAY_NAME,
+        "read_only": True,
+        "allowed_scopes": "ha.api.get.*, ha.api.post.*",
+        "timeout": 22,
+        "schema_cache_ttl": 900,
+    }
+    finish = _wget_json_request(
+        "POST",
+        f"{_HA_BASE_URL}/api/config/config_entries/options/flow/{flow_id}",
+        access_token=access_token,
+        json_payload=update_payload,
+    )
+    if finish.get("type") != "create_entry":
+        raise AssertionError("Expected create_entry response from options flow")
+    return finish
 
 
 def _assert_wget_html_page(url: str, *, access_token: str) -> None:
@@ -294,6 +310,37 @@ def _assert_wget_html_page(url: str, *, access_token: str) -> None:
     body = result.stdout.lower()
     if "<html" not in body and "<home-assistant" not in body:
         raise AssertionError(f"UI page at {url} does not look like HA HTML shell")
+
+
+def _wget_json_request(
+    method: str,
+    url: str,
+    *,
+    access_token: str,
+    json_payload: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Call one HA endpoint through wget and parse JSON response."""
+    cmd = [
+        "wget",
+        "-q",
+        "--timeout=15",
+        "-O",
+        "-",
+        "--header",
+        f"Authorization: Bearer {access_token}",
+    ]
+    if method == "POST":
+        cmd.extend(["--header", "Content-Type: application/json"])
+        body = "{}" if json_payload is None else json.dumps(json_payload)
+        cmd.extend(["--post-data", body])
+    elif method != "GET":
+        raise AssertionError(f"Unsupported wget JSON method: {method}")
+    cmd.append(url)
+    result = _run_command(cmd)
+    parsed = json.loads(result.stdout)
+    if not isinstance(parsed, dict):
+        raise AssertionError(f"Expected JSON object from {url}")
+    return parsed
 
 
 @dataclass(slots=True)
