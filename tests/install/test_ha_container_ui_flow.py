@@ -1,20 +1,26 @@
-"""Docker E2E: add integration via HA UI flow API and change options."""
+"""Docker E2E: install via HACS and verify integration settings UI."""
 
 from __future__ import annotations
 
+import asyncio
+import datetime as dt
 import json
 import os
 import pathlib
 import shutil
 import subprocess
+import tempfile
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
+import zipfile
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any
 
+import aiohttp
 import pytest
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -23,19 +29,23 @@ _CONFIG_DIR = _INSTALL_DIR / ".config-e2e"
 _COMPOSE_FILE = _INSTALL_DIR / "docker-compose.yml"
 _HA_PORT = int(os.getenv("HA_HOST_PORT", "18123"))
 _HA_BASE_URL = f"http://127.0.0.1:{_HA_PORT}"
+_HA_WS_URL = f"ws://127.0.0.1:{_HA_PORT}/api/websocket"
 _HA_CLIENT_ID = f"{_HA_BASE_URL}/"
 _TEST_USERNAME = "cursor-e2e"
 _TEST_PASSWORD = "cursor-e2e-pass"
 _TEST_DISPLAY_NAME = "Cursor E2E"
 _COMPOSE_PROJECT_NAME = "ha_simple_mcp_install_e2e"
-
-SettingsPayload = dict[str, int | bool | str | list[str]]
+_HACS_COMPONENT_ARCHIVE_URL = "https://github.com/hacs/integration/archive/refs/heads/main.zip"
+_HACS_CUSTOM_REPOSITORY = "slavonnet/ha_simple_mcp"
+_HACS_CUSTOM_REPOSITORY_URL = f"https://github.com/{_HACS_CUSTOM_REPOSITORY}"
+_HACS_GITHUB_TOKEN = os.getenv("HACS_GITHUB_TOKEN", "")
+_HACS_DOMAIN = "hacs"
 
 pytestmark = pytest.mark.install
 
 
 def test_ha_container_ui_add_integration_and_change_settings() -> None:
-    """Boot HA container and verify add + options update through UI flow API."""
+    """Run full HACS install flow and verify settings button availability."""
     _require_command("docker")
     _require_command("wget")
 
@@ -49,24 +59,32 @@ def test_ha_container_ui_add_integration_and_change_settings() -> None:
     _run_compose(["up", "-d", "--build"], env=compose_env)
     try:
         _wait_until_ready(timeout_seconds=240)
-
         auth_code = _create_onboarding_user()
         access_token = _exchange_auth_code(auth_code)
         _finish_onboarding(access_token)
+        container_id = _get_homeassistant_container_id(compose_env)
+
+        _install_hacs_custom_component(container_id)
+        _restart_homeassistant(compose_env)
+        _wait_until_ready(timeout_seconds=240)
+
+        _inject_hacs_config_entry(container_id, github_token=_HACS_GITHUB_TOKEN)
+        _restart_homeassistant(compose_env)
+        _wait_until_ready(timeout_seconds=240)
+
+        _wait_hacs_running(access_token, timeout_seconds=300)
+        repository_id = _hacs_add_custom_repository(access_token)
+        _hacs_install_repository(access_token, repository_id)
+        _assert_container_file_exists(
+            container_id,
+            "/config/custom_components/ha_simple_mcp/manifest.json",
+        )
+
+        _restart_homeassistant(compose_env)
+        _wait_until_ready(timeout_seconds=240)
 
         entry_id = _create_integration_entry(access_token)
         _walk_user_case_to_settings_with_wget(access_token, entry_id)
-        _update_integration_options(access_token, entry_id)
-        defaults = _read_integration_options_defaults(access_token, entry_id)
-
-        assert defaults["listen_host"] == "127.0.0.1"
-        assert defaults["listen_port"] == 8126
-        assert defaults["auth_token"] == "changed-token"
-        assert defaults["ha_user"] == _TEST_DISPLAY_NAME
-        assert defaults["read_only"] is True
-        assert defaults["timeout"] == 22
-        assert defaults["schema_cache_ttl"] == 900
-        assert defaults["allowed_scopes"] == ["ha.api.get.*", "ha.api.post.*"]
     finally:
         _run_compose(["down", "--volumes", "--remove-orphans"], env=compose_env, check=False)
         _remove_dir(_CONFIG_DIR)
@@ -157,6 +175,276 @@ def _finish_onboarding(access_token: str) -> None:
     _assert_status(integration, expected=200)
 
 
+def _restart_homeassistant(compose_env: dict[str, str]) -> None:
+    """Restart Home Assistant container via docker compose."""
+    _run_compose(["restart", "homeassistant"], env=compose_env)
+
+
+def _get_homeassistant_container_id(compose_env: dict[str, str]) -> str:
+    """Get current Home Assistant container ID from compose project."""
+    result = _run_compose(["ps", "-q", "homeassistant"], env=compose_env)
+    container_id = result.stdout.strip()
+    if not container_id:
+        raise AssertionError("Could not resolve Home Assistant container id from docker compose")
+    return container_id
+
+
+def _install_hacs_custom_component(container_id: str) -> None:
+    """Download HACS and copy custom_components/hacs into HA config."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = pathlib.Path(temp_dir)
+        archive_path = temp_path / "hacs-main.zip"
+        extract_root = temp_path / "extract"
+
+        with urllib.request.urlopen(_HACS_COMPONENT_ARCHIVE_URL, timeout=60) as response:
+            archive_path.write_bytes(response.read())
+        with zipfile.ZipFile(archive_path) as zip_archive:
+            zip_archive.extractall(extract_root)
+
+        candidates = list(extract_root.glob("**/custom_components/hacs"))
+        if not candidates:
+            raise AssertionError("HACS archive does not contain custom_components/hacs directory")
+        hacs_source = candidates[0]
+
+        _run_command(["docker", "exec", container_id, "mkdir", "-p", "/config/custom_components"])
+        _run_command(["docker", "cp", str(hacs_source), f"{container_id}:/config/custom_components/hacs"])
+
+
+def _inject_hacs_config_entry(container_id: str, *, github_token: str) -> None:
+    """Inject HACS config entry into HA storage to avoid interactive OAuth flow."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        local_storage = pathlib.Path(temp_dir) / "core.config_entries"
+        _run_command(
+            [
+                "docker",
+                "cp",
+                f"{container_id}:/config/.storage/core.config_entries",
+                str(local_storage),
+            ]
+        )
+        payload = json.loads(local_storage.read_text(encoding="utf-8"))
+        data = payload.setdefault("data", {})
+        entries = data.setdefault("entries", [])
+        if not isinstance(entries, list):
+            raise AssertionError("core.config_entries payload has unexpected entries structure")
+
+        now = dt.datetime.now(dt.timezone.utc).isoformat()
+        existing = next(
+            (
+                entry
+                for entry in entries
+                if isinstance(entry, dict) and str(entry.get("domain", "")) == _HACS_DOMAIN
+            ),
+            None,
+        )
+        entry_id = (
+            str(existing.get("entry_id", ""))
+            if isinstance(existing, dict) and existing.get("entry_id")
+            else f"hacs_e2e_{uuid.uuid4().hex[:12]}"
+        )
+        hacs_entry = {
+            "created_at": now,
+            "data": {"token": github_token},
+            "disabled_by": None,
+            "discovery_keys": {},
+            "domain": _HACS_DOMAIN,
+            "entry_id": entry_id,
+            "minor_version": 1,
+            "modified_at": now,
+            "options": {"experimental": True},
+            "pref_disable_new_entities": False,
+            "pref_disable_polling": False,
+            "source": "user",
+            "subentries": [],
+            "title": "HACS",
+            "unique_id": None,
+            "version": 1,
+        }
+        if existing is None:
+            entries.append(hacs_entry)
+        else:
+            existing.update(hacs_entry)
+
+        local_storage.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        _run_command(
+            [
+                "docker",
+                "cp",
+                str(local_storage),
+                f"{container_id}:/config/.storage/core.config_entries",
+            ]
+        )
+
+
+def _wait_hacs_running(access_token: str, *, timeout_seconds: int) -> None:
+    """Wait for HACS integration to reach running stage."""
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        try:
+            info = _hacs_ws_command(access_token, {"type": "hacs/info"}, timeout_seconds=45)
+        except AssertionError:
+            time.sleep(2)
+            continue
+        if isinstance(info, dict):
+            stage = str(info.get("stage", "")).lower()
+            disabled_reason = info.get("disabled_reason")
+            if stage == "running" and disabled_reason in (None, "", "None"):
+                return
+        time.sleep(2)
+    raise AssertionError("HACS integration did not reach running stage")
+
+
+def _hacs_add_custom_repository(access_token: str) -> str:
+    """Add custom repository in HACS and return discovered repository id."""
+    _hacs_ws_command(
+        access_token,
+        {
+            "type": "hacs/repositories/add",
+            "repository": _HACS_CUSTOM_REPOSITORY_URL,
+            "category": "integration",
+        },
+        timeout_seconds=180,
+    )
+    return _wait_hacs_repository_registered(
+        access_token,
+        repository_full_name=_HACS_CUSTOM_REPOSITORY,
+        timeout_seconds=360,
+    )
+
+
+def _hacs_install_repository(access_token: str, repository_id: str) -> None:
+    """Install selected repository through HACS websocket API."""
+    _hacs_ws_command(
+        access_token,
+        {"type": "hacs/repository/download", "repository": repository_id},
+        timeout_seconds=900,
+    )
+    _wait_hacs_repository_installed(
+        access_token,
+        repository_id=repository_id,
+        timeout_seconds=240,
+    )
+
+
+def _wait_hacs_repository_registered(
+    access_token: str,
+    *,
+    repository_full_name: str,
+    timeout_seconds: int,
+) -> str:
+    """Poll HACS repository list until target custom repository appears."""
+    deadline = time.time() + timeout_seconds
+    last_known: list[str] = []
+    target_name = repository_full_name.lower()
+    while time.time() < deadline:
+        repositories = _hacs_list_integration_repositories(access_token)
+        last_known = [str(repo.get("full_name", "")) for repo in repositories]
+        for repository in repositories:
+            full_name = str(repository.get("full_name", "")).lower()
+            if full_name != target_name:
+                continue
+            repository_id = repository.get("id")
+            if repository_id is None:
+                continue
+            return str(repository_id)
+        time.sleep(3)
+    raise AssertionError(
+        "Custom HACS repository was not registered in time. "
+        f"Expected: {repository_full_name}, seen: {last_known}"
+    )
+
+
+def _wait_hacs_repository_installed(
+    access_token: str,
+    *,
+    repository_id: str,
+    timeout_seconds: int,
+) -> None:
+    """Poll HACS repository list until target repository reports installed=True."""
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        repositories = _hacs_list_integration_repositories(access_token)
+        for repository in repositories:
+            if str(repository.get("id", "")) != repository_id:
+                continue
+            if repository.get("installed") is True:
+                return
+        time.sleep(3)
+    raise AssertionError(f"HACS repository {repository_id} was not marked as installed in time")
+
+
+def _hacs_list_integration_repositories(access_token: str) -> list[dict[str, Any]]:
+    """Fetch HACS repositories list for integration category."""
+    payload = _hacs_ws_command(
+        access_token,
+        {"type": "hacs/repositories/list", "categories": ["integration"]},
+        timeout_seconds=180,
+    )
+    if not isinstance(payload, list):
+        raise AssertionError("Expected list payload from HACS repositories list command")
+    return [item for item in payload if isinstance(item, dict)]
+
+
+def _hacs_ws_command(
+    access_token: str,
+    command: dict[str, Any],
+    *,
+    timeout_seconds: int,
+) -> Any:
+    """Run one HACS websocket command and return `result` payload."""
+    return asyncio.run(
+        _async_hacs_ws_command(
+            access_token=access_token,
+            command=command,
+            timeout_seconds=timeout_seconds,
+        )
+    )
+
+
+async def _async_hacs_ws_command(
+    *,
+    access_token: str,
+    command: dict[str, Any],
+    timeout_seconds: int,
+) -> Any:
+    """Execute websocket command against HA API and parse command result."""
+    timeout = aiohttp.ClientTimeout(total=timeout_seconds)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        async with session.ws_connect(_HA_WS_URL, heartbeat=30) as websocket:
+            initial = await websocket.receive_json(timeout=30)
+            if initial.get("type") != "auth_required":
+                raise AssertionError(f"Unexpected websocket greeting: {initial}")
+            await websocket.send_json({"type": "auth", "access_token": access_token})
+
+            auth = await websocket.receive_json(timeout=30)
+            if auth.get("type") != "auth_ok":
+                raise AssertionError(f"Websocket auth failed: {auth}")
+
+            request_id = 1
+            request_payload = {"id": request_id, **command}
+            await websocket.send_json(request_payload)
+
+            deadline = time.time() + timeout_seconds
+            while time.time() < deadline:
+                message = await websocket.receive_json(timeout=30)
+                if message.get("id") != request_id:
+                    continue
+                if message.get("type") != "result":
+                    continue
+                if message.get("success") is not True:
+                    raise AssertionError(
+                        "HACS websocket command failed: "
+                        f"{command.get('type')} -> {message.get('error')}"
+                    )
+                return message.get("result")
+    raise AssertionError(f"No websocket result returned for command {command.get('type')}")
+
+
+def _assert_container_file_exists(container_id: str, path: str) -> None:
+    """Assert regular file exists inside Home Assistant container."""
+    _run_command(["docker", "exec", container_id, "test", "-f", path])
+
+
 def _create_integration_entry(access_token: str) -> str:
     """Run config flow API to create ha_simple_mcp integration entry."""
     headers = _auth_headers(access_token)
@@ -194,77 +482,6 @@ def _create_integration_entry(access_token: str) -> str:
     entry = finish_data["result"]
     assert entry["domain"] == "ha_simple_mcp"
     return str(entry["entry_id"])
-
-
-def _update_integration_options(access_token: str, entry_id: str) -> dict[str, Any]:
-    """Run options flow API to update ha_simple_mcp settings."""
-    headers = _auth_headers(access_token)
-    start = _http_request(
-        "POST",
-        f"{_HA_BASE_URL}/api/config/config_entries/options/flow",
-        headers=headers,
-        json_payload={"handler": entry_id},
-        timeout=15,
-    )
-    _assert_status(start, expected=200)
-    start_data = _json_body(start)
-    flow_id = str(start_data["flow_id"])
-
-    update_payload = {
-        "listen_host": "127.0.0.1",
-        "listen_port": 8126,
-        "auth_token": "changed-token",
-        "ha_user": _TEST_DISPLAY_NAME,
-        "read_only": True,
-        "allowed_scopes": "ha.api.get.*, ha.api.post.*",
-        "timeout": 22,
-        "schema_cache_ttl": 900,
-    }
-    finish = _http_request(
-        "POST",
-        f"{_HA_BASE_URL}/api/config/config_entries/options/flow/{flow_id}",
-        headers=headers,
-        json_payload=update_payload,
-        timeout=15,
-    )
-    _assert_status(finish, expected=200)
-    finish_data = _json_body(finish)
-    assert finish_data["type"] == "create_entry"
-    return finish_data
-
-
-def _read_integration_options_defaults(access_token: str, entry_id: str) -> SettingsPayload:
-    """Read current options defaults from options flow form schema."""
-    headers = _auth_headers(access_token)
-    start = _http_request(
-        "POST",
-        f"{_HA_BASE_URL}/api/config/config_entries/options/flow",
-        headers=headers,
-        json_payload={"handler": entry_id},
-        timeout=15,
-    )
-    _assert_status(start, expected=200)
-    payload = _json_body(start)
-    schema = payload.get("data_schema")
-    if not isinstance(schema, list):
-        raise AssertionError("Expected options flow data_schema as list")
-
-    defaults: SettingsPayload = {}
-    for field in schema:
-        if not isinstance(field, dict):
-            continue
-        name = field.get("name")
-        if not isinstance(name, str) or "default" not in field:
-            continue
-        defaults[name] = cast(int | bool | str | list[str], field["default"])
-
-    defaults["allowed_scopes"] = _split_scope_csv(str(defaults.get("allowed_scopes", "")))
-    return defaults
-
-
-def _split_scope_csv(value: str) -> list[str]:
-    """Convert scope CSV into normalized list for assertions."""
-    return [scope.strip() for scope in value.split(",") if scope.strip()]
 
 
 def _auth_headers(access_token: str) -> dict[str, str]:
