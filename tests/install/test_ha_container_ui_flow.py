@@ -256,9 +256,10 @@ def _walk_user_case_to_settings_with_wget(
         access_token=access_token,
     )
 
-    details_url = f"{_HA_BASE_URL}/api/config/config_entries/entry/{entry_id}"
-    data = _wget_json_request("GET", details_url, access_token=access_token)
-    if data.get("supports_options") is not True:
+    entries_url = f"{_HA_BASE_URL}/api/config/config_entries/entry?domain=ha_simple_mcp"
+    entries = _wget_json_request("GET", entries_url, access_token=access_token)
+    entry = _find_entry_fragment(entries, entry_id=entry_id)
+    if entry.get("supports_options") is not True:
         raise AssertionError(
             "Expected supports_options=true for component settings button visibility"
         )
@@ -316,7 +317,7 @@ def _wget_json_request(
     *,
     access_token: str,
     json_payload: Mapping[str, Any] | None = None,
-) -> dict[str, Any]:
+) -> Any:
     """Call one HA endpoint through wget and parse JSON response."""
     cmd = [
         "wget",
@@ -335,10 +336,19 @@ def _wget_json_request(
         raise AssertionError(f"Unsupported wget JSON method: {method}")
     cmd.append(url)
     result = _run_command(cmd)
-    parsed = json.loads(result.stdout)
-    if not isinstance(parsed, dict):
-        raise AssertionError(f"Expected JSON object from {url}")
-    return parsed
+    return json.loads(result.stdout)
+
+
+def _find_entry_fragment(payload: Any, *, entry_id: str) -> dict[str, Any]:
+    """Find one config entry object by entry_id in list payload."""
+    if not isinstance(payload, list):
+        raise AssertionError("Expected config entries payload to be a JSON list")
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("entry_id", "")) == entry_id:
+            return item
+    raise AssertionError(f"Config entry {entry_id} not found in config entries payload")
 
 
 @dataclass(slots=True)
