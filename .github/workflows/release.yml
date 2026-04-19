@@ -23,12 +23,40 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: refs/tags/${{ env.RELEASE_TAG }}
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Normalize release tag input
+        run: |
+          if [[ "${RELEASE_TAG}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            RELEASE_TAG="v${RELEASE_TAG}"
+            echo "Normalized release tag to '${RELEASE_TAG}'"
+          fi
+          echo "RELEASE_TAG=${RELEASE_TAG}" >> "$GITHUB_ENV"
+
+      - name: Ensure requested release tag exists
+        run: |
+          if ! git rev-parse -q --verify "refs/tags/${RELEASE_TAG}" >/dev/null; then
+            git fetch --tags origin
+          fi
+          if ! git rev-parse -q --verify "refs/tags/${RELEASE_TAG}" >/dev/null; then
+            echo "::error::Tag '${RELEASE_TAG}' not found in origin."
+            echo "::error::Create/push the tag first or select an existing tag in Run workflow."
+            exit 1
+          fi
+
+      - name: Checkout requested release tag
+        run: |
+          git checkout --force "refs/tags/${RELEASE_TAG}"
+
+      - name: Sync release files from tag version
+        run: |
+          python scripts/release_bump.py "${RELEASE_TAG#v}"
 
       - name: Validate version consistency for release tag
         run: |
@@ -49,18 +77,22 @@ jobs:
           tag_version = release_tag.removeprefix("v")
           pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
           project = pyproject["project"]
-          dynamic_versions = set(project.get("dynamic", []))
-          scm_config = pyproject.get("tool", {}).get("setuptools_scm")
-          if "version" not in dynamic_versions:
+          dynamic_version_enabled = "version" in project.get("dynamic", [])
+          project_version = project.get("version")
+          if dynamic_version_enabled:
+              if "version" in project:
+                  raise SystemExit(
+                      "project.version must be omitted when dynamic versioning is enabled"
+                  )
+              scm_config = pyproject.get("tool", {}).get("setuptools_scm")
+              if not isinstance(scm_config, dict):
+                  raise SystemExit(
+                      "tool.setuptools_scm config is required for dynamic tag versions"
+                  )
+          elif project_version != tag_version:
               raise SystemExit(
-                  "pyproject must use dynamic package version from git tags via project.dynamic"
+                  f"pyproject version '{project_version}' does not match tag '{tag_version}'"
               )
-          if "version" in project:
-              raise SystemExit(
-                  "project.version must be omitted when dynamic versioning is enabled"
-              )
-          if not isinstance(scm_config, dict):
-              raise SystemExit("tool.setuptools_scm config is required for dynamic tag versions")
 
           manifest = json.loads(
               Path("custom_components/ha_simple_mcp/manifest.json").read_text(encoding="utf-8")
@@ -83,7 +115,40 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: refs/tags/${{ env.RELEASE_TAG }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Normalize release tag input
+        run: |
+          if [[ "${RELEASE_TAG}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            RELEASE_TAG="v${RELEASE_TAG}"
+            echo "Normalized release tag to '${RELEASE_TAG}'"
+          fi
+          echo "RELEASE_TAG=${RELEASE_TAG}" >> "$GITHUB_ENV"
+
+      - name: Ensure requested release tag exists
+        run: |
+          if ! git rev-parse -q --verify "refs/tags/${RELEASE_TAG}" >/dev/null; then
+            git fetch --tags origin
+          fi
+          if ! git rev-parse -q --verify "refs/tags/${RELEASE_TAG}" >/dev/null; then
+            echo "::error::Tag '${RELEASE_TAG}' not found in origin."
+            echo "::error::Create/push the tag first or select an existing tag in Run workflow."
+            exit 1
+          fi
+
+      - name: Checkout requested release tag
+        run: |
+          git checkout --force "refs/tags/${RELEASE_TAG}"
+
+      - name: Sync release files from tag version
+        run: |
+          python scripts/release_bump.py "${RELEASE_TAG#v}"
 
       - name: Build HACS release archive
         run: |

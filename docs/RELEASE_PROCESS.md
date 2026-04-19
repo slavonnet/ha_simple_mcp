@@ -60,9 +60,12 @@ This repository uses a **release-via-PR** workflow.
 7. If release asset is missing, re-run publication manually:
 
    - Go to **Actions -> Release -> Run workflow**
-   - Pass tag in input `tag` (for example `v0.1.2`)
-   - Workflow checks out that tag, validates versions, and re-publishes
-     `ha_simple_mcp.zip` into the selected release
+   - Pass an existing tag in input `tag` (for example `v0.1.1`)
+   - Workflow first checks that the tag exists on remote and fails with
+     an explicit message if tag is missing
+   - Workflow then aligns release metadata in-place (`manifest.json`,
+     `README.md`, dependency pin) using `scripts/release_bump.py`
+   - Finally it re-publishes `ha_simple_mcp.zip` into the selected release
 
 ## HACS versioned mode
 
