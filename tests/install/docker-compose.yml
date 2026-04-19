@@ -1,6 +1,6 @@
 services:
   homeassistant:
-    image: ha-simple-mcp-test:local
+    image: ghcr.io/home-assistant/home-assistant:stable
     restart: "no"
     network_mode: bridge
     ports:
