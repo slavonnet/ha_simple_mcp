@@ -1,0 +1,10 @@
+{
+  "name": "HA Simple MCP",
+  "render_readme": true,
+  "content_in_root": false,
+  "zip_release": false,
+  "domains": [
+    "ha_simple_mcp"
+  ],
+  "homeassistant": "2025.1.0"
+}

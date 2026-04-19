@@ -1,0 +1,14 @@
+[
+  {
+    "method": "GET",
+    "path": "/api/states"
+  },
+  {
+    "method": "POST",
+    "path": "/api/services/{domain}/{service}"
+  },
+  {
+    "method": "GET",
+    "path": "/api/history/period"
+  }
+]

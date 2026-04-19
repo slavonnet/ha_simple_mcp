@@ -1,0 +1,26 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "HA Simple MCP",
+        "description": "Настройте мост MCP",
+        "data": {
+          "listen_host": "Адрес прослушивания (пусто = все интерфейсы)",
+          "listen_port": "Порт биндинга",
+          "auth_token": "Токен авторизации (необязательно)",
+          "ha_user": "Пользователь Home Assistant для API",
+          "read_only": "Разрешать только GET запросы",
+          "allowed_scopes": "Разрешенные scope (через запятую)",
+          "schema_cache_ttl": "TTL кэша схемы (сек)",
+          "timeout": "Таймаут вызова API (сек)"
+        }
+      }
+    },
+    "error": {
+      "user_not_found": "Выбранный пользователь не найден"
+    },
+    "abort": {
+      "single_instance_allowed": "Разрешен только один экземпляр"
+    }
+  }
+}
