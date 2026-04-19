@@ -33,11 +33,23 @@ jobs:
 
       - name: Normalize release tag input
         run: |
-          if [[ "${RELEASE_TAG}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            RELEASE_TAG="v${RELEASE_TAG}"
+          if [[ "${RELEASE_TAG}" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            RELEASE_VERSION="${BASH_REMATCH[1]}"
+          elif [[ "${RELEASE_TAG}" =~ ^v\.([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            RELEASE_VERSION="${BASH_REMATCH[1]}"
+            echo "::warning::Tag '${RELEASE_TAG}' uses legacy malformed format 'v.X.Y.Z'."
+            echo "::warning::Prefer creating tags as 'vX.Y.Z'."
+          elif [[ "${RELEASE_TAG}" =~ ^([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            RELEASE_VERSION="${BASH_REMATCH[1]}"
+            RELEASE_TAG="v${RELEASE_VERSION}"
             echo "Normalized release tag to '${RELEASE_TAG}'"
+          else
+            echo "::error::Unsupported tag format '${RELEASE_TAG}'."
+            echo "::error::Use tag format vX.Y.Z or X.Y.Z (example: v1.1.1)."
+            exit 1
           fi
           echo "RELEASE_TAG=${RELEASE_TAG}" >> "$GITHUB_ENV"
+          echo "RELEASE_VERSION=${RELEASE_VERSION}" >> "$GITHUB_ENV"
 
       - name: Ensure requested release tag exists
         run: |
@@ -56,7 +68,7 @@ jobs:
 
       - name: Sync release files from tag version
         run: |
-          python scripts/release_bump.py "${RELEASE_TAG#v}"
+          python scripts/release_bump.py "${RELEASE_VERSION}"
 
       - name: Validate version consistency for release tag
         run: |
@@ -71,10 +83,13 @@ jobs:
           import tomllib
 
           release_tag = os.environ["RELEASE_TAG"]
-          if not re.fullmatch(r"v\d+\.\d+\.\d+", release_tag):
-              raise SystemExit(f"Unsupported tag format: {release_tag}")
-
-          tag_version = release_tag.removeprefix("v")
+          tag_version = os.environ["RELEASE_VERSION"]
+          if not re.fullmatch(r"v\.?\d+\.\d+\.\d+", release_tag):
+              raise SystemExit(f"Unsupported normalized tag format: {release_tag}")
+          if release_tag.removeprefix("v").lstrip(".") != tag_version:
+              raise SystemExit(
+                  f"RELEASE_TAG '{release_tag}' and RELEASE_VERSION '{tag_version}' are inconsistent"
+              )
           pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
           project = pyproject["project"]
           dynamic_version_enabled = "version" in project.get("dynamic", [])
@@ -125,11 +140,23 @@ jobs:
 
       - name: Normalize release tag input
         run: |
-          if [[ "${RELEASE_TAG}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            RELEASE_TAG="v${RELEASE_TAG}"
+          if [[ "${RELEASE_TAG}" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            RELEASE_VERSION="${BASH_REMATCH[1]}"
+          elif [[ "${RELEASE_TAG}" =~ ^v\.([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            RELEASE_VERSION="${BASH_REMATCH[1]}"
+            echo "::warning::Tag '${RELEASE_TAG}' uses legacy malformed format 'v.X.Y.Z'."
+            echo "::warning::Prefer creating tags as 'vX.Y.Z'."
+          elif [[ "${RELEASE_TAG}" =~ ^([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            RELEASE_VERSION="${BASH_REMATCH[1]}"
+            RELEASE_TAG="v${RELEASE_VERSION}"
             echo "Normalized release tag to '${RELEASE_TAG}'"
+          else
+            echo "::error::Unsupported tag format '${RELEASE_TAG}'."
+            echo "::error::Use tag format vX.Y.Z or X.Y.Z (example: v1.1.1)."
+            exit 1
           fi
           echo "RELEASE_TAG=${RELEASE_TAG}" >> "$GITHUB_ENV"
+          echo "RELEASE_VERSION=${RELEASE_VERSION}" >> "$GITHUB_ENV"
 
       - name: Ensure requested release tag exists
         run: |
@@ -148,7 +175,7 @@ jobs:
 
       - name: Sync release files from tag version
         run: |
-          python scripts/release_bump.py "${RELEASE_TAG#v}"
+          python scripts/release_bump.py "${RELEASE_VERSION}"
 
       - name: Build HACS release archive
         run: |

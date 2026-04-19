@@ -64,8 +64,9 @@ This repository uses a **release-via-PR** workflow.
 7. If release asset is missing, re-run publication manually:
 
    - Go to **Actions -> Release -> Run workflow**
-   - Pass an existing tag in input `tag` (for example `v0.1.1`)
-   - Workflow first checks that the tag exists on remote and fails with
+   - Pass an existing tag in input `tag` (for example `v0.1.1` or `0.1.1`)
+   - Workflow first normalizes and validates the tag format (`vX.Y.Z` or `X.Y.Z`)
+   - Workflow then checks that the tag exists on remote and fails with
      an explicit message if tag is missing
    - Workflow then aligns release metadata in-place (`manifest.json`) using
      `scripts/release_bump.py`
