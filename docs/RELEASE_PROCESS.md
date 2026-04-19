@@ -25,17 +25,17 @@ This repository uses a **release-via-PR** workflow.
 
    This updates:
    - `custom_components/ha_simple_mcp/manifest.json` -> `version`
-   - pin of external dependency `ha-api-mcp` tag to `vX.Y.Z`
-   - `README.md` external package reference tag (`vX.Y.Z`)
 
    Note: package version in `pyproject.toml` is now dynamic (from git tags via
    `setuptools_scm`), so no manual bump is required there.
+   Note: version of external `ha-api-mcp` dependency is independent and is not
+   auto-aligned to release branch version of this repository.
 
 3. Open PR from `release/X.Y.Z` to `main`.
 
    `Release PR Check` now auto-runs `scripts/release_bump.py X.Y.Z` in the
-   release branch and pushes synchronized files back into the PR (manifest,
-   README, and dependency pins) when drift is detected.
+   release branch and pushes synchronized `manifest.json` version back into the
+   PR when drift is detected.
 
 4. CI checks:
    - `CI` workflow (lint, mypy, tests, 100% coverage)
@@ -67,8 +67,8 @@ This repository uses a **release-via-PR** workflow.
    - Pass an existing tag in input `tag` (for example `v0.1.1`)
    - Workflow first checks that the tag exists on remote and fails with
      an explicit message if tag is missing
-   - Workflow then aligns release metadata in-place (`manifest.json`,
-     `README.md`, dependency pin) using `scripts/release_bump.py`
+   - Workflow then aligns release metadata in-place (`manifest.json`) using
+     `scripts/release_bump.py`
    - Finally it re-publishes `ha_simple_mcp.zip` into the selected release
 
 ## HACS versioned mode

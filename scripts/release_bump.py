@@ -1,77 +1,33 @@
-"""Update release-related versions for a release PR.
+"""Update integration release version for a release PR.
 
 Usage:
     python scripts/release_bump.py 0.1.1
 
 The script updates:
     - ``custom_components/ha_simple_mcp/manifest.json`` -> ``version``
-    - dependency pin for ``ha-api-mcp`` git tag (``@vX.Y.Z``) in both:
-      - ``pyproject.toml``
-      - ``custom_components/ha_simple_mcp/manifest.json``
-    - ``README.md`` note with currently used ``ha-api-mcp`` release tag
 """
 
 from __future__ import annotations
 
 import json
-import re
 import sys
 from pathlib import Path
 
+import re
+
 SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
-PYPROJECT_PATH = Path("pyproject.toml")
 MANIFEST_PATH = Path("custom_components/ha_simple_mcp/manifest.json")
-README_PATH = Path("README.md")
 
 
 def _bump_manifest(version: str) -> None:
-    """Update manifest version and external package tag pin."""
+    """Update integration version in manifest."""
     manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
     manifest["version"] = version
-
-    requirements = manifest.get("requirements", [])
-    updated_requirements: list[str] = []
-    for requirement in requirements:
-        updated_requirements.append(
-            re.sub(
-                r"(ha-api-mcp\s*@\s*git\+https://github\.com/slavonnet/ha-api-mcp\.git@)v\d+\.\d+\.\d+",
-                rf"\1v{version}",
-                requirement,
-            )
-        )
-    manifest["requirements"] = updated_requirements
 
     MANIFEST_PATH.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
-
-
-def _bump_pyproject(version: str) -> None:
-    """Update pyproject dependency tag pin."""
-    content = PYPROJECT_PATH.read_text(encoding="utf-8")
-    content = re.sub(
-        r"(ha-api-mcp\s*@\s*git\+https://github\.com/slavonnet/ha-api-mcp\.git@)v\d+\.\d+\.\d+",
-        rf"\1v{version}",
-        content,
-    )
-    PYPROJECT_PATH.write_text(content, encoding="utf-8")
-
-
-def _bump_readme(version: str) -> None:
-    """Update README line that documents pinned ha-api-mcp release tag."""
-    content = README_PATH.read_text(encoding="utf-8")
-    pattern = re.compile(
-        r"(?m)^- release tag currently used here: `v\d+\.\d+\.\d+`$"
-    )
-    if not pattern.search(content):
-        raise ValueError("README release tag line not found")
-    content = pattern.sub(
-        f"- release tag currently used here: `v{version}`",
-        content,
-        count=1,
-    )
-    README_PATH.write_text(content, encoding="utf-8")
 
 
 def main() -> int:
@@ -85,9 +41,7 @@ def main() -> int:
         print(f"Invalid version format: {target_version}")
         return 1
 
-    _bump_pyproject(target_version)
     _bump_manifest(target_version)
-    _bump_readme(target_version)
     print(f"Updated release version to {target_version}")
     return 0
 
