@@ -209,6 +209,61 @@ async def test_api_proxy_falls_back_to_text_payload() -> None:
     assert body == "plain text"
 
 
+@pytest.mark.asyncio
+async def test_api_proxy_post_without_body_omits_json_argument() -> None:
+    proxy = ApiProxy(
+        McpSettings(
+            bind_address="",
+            port=0,
+            auth_token="",
+            target_user="owner",
+            read_only=False,
+            scope_allowlist=(),
+            schema_cache_ttl=10,
+            timeout=5,
+            base_url="http://ha.local",
+        )
+    )
+    endpoint = ApiEndpoint(
+        method="POST",
+        path="/api/services/{domain}/turn_on",
+        description="Call service",
+        returns_description="result",
+        parameters=(
+            ApiParameter(
+                name="domain",
+                required=True,
+                description="Domain in path",
+                schema_type="string",
+                in_path=True,
+            ),
+        ),
+        scope="ha.api.post.api.services.domain.turn_on",
+    )
+
+    response = AsyncMock()
+    response.status = 200
+    response.json = AsyncMock(return_value={"ok": True})
+    response.text = AsyncMock(return_value="ok")
+
+    session = AsyncMock()
+    session.__aenter__.return_value = session
+    request_cm = MagicMock()
+    request_cm.__aenter__ = AsyncMock(return_value=response)
+    request_cm.__aexit__ = AsyncMock(return_value=False)
+    session.request = MagicMock(return_value=request_cm)
+
+    with patch("ha_simple_mcp.proxy.ClientSession", return_value=session):
+        status, body = await proxy.call(endpoint, {"domain": "light"})
+
+    assert status == 200
+    assert body == {"ok": True}
+    kwargs = session.request.call_args.kwargs
+    assert kwargs["headers"] == {}
+    assert "json" not in kwargs
+    assert kwargs["timeout"] == 5
+
+
 def test_build_request_skips_none_path_values() -> None:
     endpoint = _endpoint_get()
     path, body, query = build_request(endpoint, {"entity_id": None, "limit": 2})

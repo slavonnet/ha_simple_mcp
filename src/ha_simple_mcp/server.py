@@ -81,8 +81,6 @@ class McpHttpServer:
         if self._runner is not None:
             await self._runner.cleanup()
             self._runner = None
-        if self._site is None:
-            return
 
     async def _handle_health(self, request: web.Request) -> web.Response:
         """Handle health endpoint request.

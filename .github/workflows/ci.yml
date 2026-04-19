@@ -31,4 +31,4 @@ jobs:
         run: python -m mypy src custom_components tests
 
       - name: Test with coverage gate
-        run: python -m pytest -q --cov=src/ha_simple_mcp --cov-branch --cov-fail-under=100 --cov-report=term-missing
+        run: python -m pytest -q --cov=src/ha_simple_mcp --cov=custom_components --cov-branch --cov-fail-under=100 --cov-report=term-missing

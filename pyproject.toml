@@ -41,7 +41,7 @@ asyncio_mode = "auto"
 testpaths = [
   "tests",
 ]
-addopts = "--cov=src/ha_simple_mcp --cov-report=term-missing --cov-fail-under=100"
+addopts = "--cov=src/ha_simple_mcp --cov=custom_components --cov-branch --cov-report=term-missing --cov-fail-under=100"
 markers = [
   "install: tests requiring docker and live install checks",
 ]
