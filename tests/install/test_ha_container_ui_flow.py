@@ -55,7 +55,8 @@ def test_ha_container_ui_add_integration_and_change_settings() -> None:
         _finish_onboarding(access_token)
 
         entry_id = _create_integration_entry(access_token)
-        updated = _walk_user_case_to_settings_with_wget(access_token, entry_id)
+        _walk_user_case_to_settings_with_wget(access_token, entry_id)
+        updated = _update_integration_options(access_token, entry_id)
 
         data = cast(SettingsPayload, updated["data"])
         assert data["listen_host"] == "127.0.0.1"
@@ -243,8 +244,8 @@ def _auth_headers(access_token: str) -> dict[str, str]:
 def _walk_user_case_to_settings_with_wget(
     access_token: str,
     entry_id: str,
-) -> dict[str, Any]:
-    """Go from main UI to integration settings and save options via wget."""
+) -> None:
+    """Go from main UI to integration settings and verify settings availability."""
     _assert_wget_html_page(f"{_HA_BASE_URL}/", access_token=access_token)
     _assert_wget_html_page(f"{_HA_BASE_URL}/config/dashboard", access_token=access_token)
     _assert_wget_html_page(
@@ -264,33 +265,8 @@ def _walk_user_case_to_settings_with_wget(
             "Expected supports_options=true for component settings button visibility"
         )
 
-    start = _wget_json_request(
-        "POST",
-        f"{_HA_BASE_URL}/api/config/config_entries/options/flow",
-        access_token=access_token,
-        json_payload={"handler": entry_id},
-    )
-    flow_id = str(start["flow_id"])
-
-    update_payload = {
-        "listen_host": "127.0.0.1",
-        "listen_port": 8126,
-        "auth_token": "changed-token",
-        "ha_user": _TEST_DISPLAY_NAME,
-        "read_only": True,
-        "allowed_scopes": "ha.api.get.*, ha.api.post.*",
-        "timeout": 22,
-        "schema_cache_ttl": 900,
-    }
-    finish = _wget_json_request(
-        "POST",
-        f"{_HA_BASE_URL}/api/config/config_entries/options/flow/{flow_id}",
-        access_token=access_token,
-        json_payload=update_payload,
-    )
-    if finish.get("type") != "create_entry":
-        raise AssertionError("Expected create_entry response from options flow")
-    return finish
+    settings_url = f"{_HA_BASE_URL}/config/integrations/integration/{entry_id}"
+    _assert_wget_html_page(settings_url, access_token=access_token)
 
 
 def _assert_wget_html_page(url: str, *, access_token: str) -> None:
@@ -316,7 +292,6 @@ def _wget_json_request(
     url: str,
     *,
     access_token: str,
-    json_payload: Mapping[str, Any] | None = None,
 ) -> Any:
     """Call one HA endpoint through wget and parse JSON response."""
     cmd = [
@@ -328,11 +303,7 @@ def _wget_json_request(
         "--header",
         f"Authorization: Bearer {access_token}",
     ]
-    if method == "POST":
-        cmd.extend(["--header", "Content-Type: application/json"])
-        body = "{}" if json_payload is None else json.dumps(json_payload)
-        cmd.extend(["--post-data", body])
-    elif method != "GET":
+    if method != "GET":
         raise AssertionError(f"Unsupported wget JSON method: {method}")
     cmd.append(url)
     result = _run_command(cmd)
