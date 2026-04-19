@@ -10,10 +10,9 @@ The script updates:
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
-
-import re
 
 SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
 MANIFEST_PATH = Path("custom_components/ha_simple_mcp/manifest.json")
