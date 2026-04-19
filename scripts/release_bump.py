@@ -8,6 +8,7 @@ The script updates:
     - dependency pin for ``ha-api-mcp`` git tag (``@vX.Y.Z``) in both:
       - ``pyproject.toml``
       - ``custom_components/ha_simple_mcp/manifest.json``
+    - ``README.md`` note with currently used ``ha-api-mcp`` release tag
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from pathlib import Path
 SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
 PYPROJECT_PATH = Path("pyproject.toml")
 MANIFEST_PATH = Path("custom_components/ha_simple_mcp/manifest.json")
+README_PATH = Path("README.md")
 
 
 def _bump_manifest(version: str) -> None:
@@ -56,6 +58,22 @@ def _bump_pyproject(version: str) -> None:
     PYPROJECT_PATH.write_text(content, encoding="utf-8")
 
 
+def _bump_readme(version: str) -> None:
+    """Update README line that documents pinned ha-api-mcp release tag."""
+    content = README_PATH.read_text(encoding="utf-8")
+    pattern = re.compile(
+        r"(?m)^- release tag currently used here: `v\d+\.\d+\.\d+`$"
+    )
+    if not pattern.search(content):
+        raise ValueError("README release tag line not found")
+    content = pattern.sub(
+        f"- release tag currently used here: `v{version}`",
+        content,
+        count=1,
+    )
+    README_PATH.write_text(content, encoding="utf-8")
+
+
 def main() -> int:
     """Entrypoint for release version bump."""
     if len(sys.argv) != 2:
@@ -69,6 +87,7 @@ def main() -> int:
 
     _bump_pyproject(target_version)
     _bump_manifest(target_version)
+    _bump_readme(target_version)
     print(f"Updated release version to {target_version}")
     return 0
 

@@ -26,6 +26,7 @@ This repository uses a **release-via-PR** workflow.
    This updates:
    - `custom_components/ha_simple_mcp/manifest.json` -> `version`
    - pin of external dependency `ha-api-mcp` tag to `vX.Y.Z`
+   - `README.md` external package reference tag (`vX.Y.Z`)
 
    Note: package version in `pyproject.toml` is now dynamic (from git tags via
    `setuptools_scm`), so no manual bump is required there.
