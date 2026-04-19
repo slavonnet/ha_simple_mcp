@@ -27,4 +27,4 @@ jobs:
 
       - name: Audit dependencies for vulnerabilities
         run: |
-          python -m pip_audit --strict --desc
+          python -m pip_audit --local --vulnerability-service osv --strict --desc

@@ -35,6 +35,9 @@ This repository uses a **release-via-PR** workflow.
    - `Security Audit` workflow (`pip-audit --strict`)
    - `Release PR Check` workflow (ensures branch name and versions are aligned)
 
+   Note: dependency audit runs in an isolated clean environment against the
+   project dependency graph, including externally pinned `ha-api-mcp`.
+
 5. Merge PR.
 
 6. Create tag and release:
