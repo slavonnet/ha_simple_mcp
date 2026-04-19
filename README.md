@@ -34,7 +34,7 @@ Core MCP logic is consumed from external package `ha-api-mcp` (import namespace
 `ha_api_mcp`) published from:
 
 - https://github.com/slavonnet/ha-api-mcp
-- release tag currently used here: `v0.1.1`
+- release tag currently used here: `v1.1.1`
 
 The HACS integration in this repository is a thin Home Assistant adapter layer.
 
