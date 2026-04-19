@@ -5,6 +5,9 @@ on:
     tags:
       - "v*.*.*"
 
+permissions:
+  contents: write
+
 jobs:
   validate-version:
     runs-on: ubuntu-latest
@@ -65,9 +68,9 @@ jobs:
           cd custom_components
           zip -r "../dist/ha_simple_mcp.zip" "ha_simple_mcp"
 
-      - name: Upload HACS archive artifact
-        uses: actions/upload-artifact@v4
+      - name: Publish HACS archive as release asset
+        uses: softprops/action-gh-release@v2
         with:
-          name: ha_simple_mcp-release
-          path: dist/ha_simple_mcp.zip
-          if-no-files-found: error
+          files: dist/ha_simple_mcp.zip
+          generate_release_notes: true
+          append_body: true
