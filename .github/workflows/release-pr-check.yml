@@ -2,19 +2,72 @@ name: Release PR Check
 
 on:
   pull_request:
-    paths:
-      - "pyproject.toml"
-      - "custom_components/ha_simple_mcp/manifest.json"
-      - "custom_components/ha_simple_mcp/const.py"
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
+permissions:
+  contents: write
 
 jobs:
-  validate-release-version-bump:
-    if: startsWith(github.head_ref, 'release/')
+  auto-bump-release-version:
+    if: startsWith(github.head_ref, 'release/') && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout release branch
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Parse release branch version
+        id: release_version
+        env:
+          GITHUB_HEAD_REF: ${{ github.head_ref }}
+        run: |
+          target_version="${GITHUB_HEAD_REF#release/}"
+          if [[ ! "${target_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Release branch must match release/<semver>, got ${GITHUB_HEAD_REF}"
+            exit 1
+          fi
+          echo "target_version=${target_version}" >> "$GITHUB_OUTPUT"
+
+      - name: Run release bump script
+        run: |
+          python scripts/release_bump.py "${{ steps.release_version.outputs.target_version }}"
+
+      - name: Commit and push auto-bump changes
+        env:
+          GITHUB_HEAD_REF: ${{ github.head_ref }}
+        run: |
+          if git diff --quiet; then
+            echo "Release metadata is already synchronized."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pyproject.toml custom_components/ha_simple_mcp/manifest.json README.md
+          git commit -m "chore: auto-sync release metadata for v${{ steps.release_version.outputs.target_version }}"
+          git push origin "HEAD:${GITHUB_HEAD_REF}"
+
+  validate-release-version-bump:
+    if: startsWith(github.head_ref, 'release/')
+    needs:
+      - auto-bump-release-version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
           fetch-depth: 0
 
       - name: Setup Python
