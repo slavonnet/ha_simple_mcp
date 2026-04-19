@@ -53,8 +53,10 @@ def test_ha_container_ui_add_integration_and_change_settings() -> None:
         auth_code = _create_onboarding_user()
         access_token = _exchange_auth_code(auth_code)
         _finish_onboarding(access_token)
+        _assert_ui_shell_pages_exist_with_wget(access_token)
 
         entry_id = _create_integration_entry(access_token)
+        _assert_component_settings_available_with_wget(access_token, entry_id)
         updated = _update_integration_options(access_token, entry_id)
 
         data = cast(SettingsPayload, updated["data"])
@@ -240,6 +242,60 @@ def _auth_headers(access_token: str) -> dict[str, str]:
     }
 
 
+def _assert_ui_shell_pages_exist_with_wget(access_token: str) -> None:
+    """Ensure HA UI pages are reachable and contain HTML shell."""
+    _assert_wget_html_page(
+        f"{_HA_BASE_URL}/config/integrations/dashboard",
+        access_token=access_token,
+    )
+    _assert_wget_html_page(
+        f"{_HA_BASE_URL}/config/integrations",
+        access_token=access_token,
+    )
+
+
+def _assert_component_settings_available_with_wget(access_token: str, entry_id: str) -> None:
+    """Validate backend UI metadata says settings button should be shown."""
+    details_url = f"{_HA_BASE_URL}/api/config/config_entries/entry/{entry_id}"
+    cmd = [
+        "wget",
+        "-q",
+        "--timeout=15",
+        "-O",
+        "-",
+        "--header",
+        f"Authorization: Bearer {access_token}",
+        details_url,
+    ]
+    result = _run_command(cmd)
+    data = json.loads(result.stdout)
+    if not isinstance(data, dict):
+        raise AssertionError("Config entry details payload must be JSON object")
+    supports_options = data.get("supports_options", False)
+    if supports_options is not True:
+        raise AssertionError(
+            "Expected supports_options=true for component settings button visibility"
+        )
+
+
+def _assert_wget_html_page(url: str, *, access_token: str) -> None:
+    """Fetch one UI page with wget and assert basic HTML payload exists."""
+    cmd = [
+        "wget",
+        "-q",
+        "--timeout=15",
+        "-O",
+        "-",
+        "--header",
+        f"Authorization: Bearer {access_token}",
+        url,
+    ]
+    result = _run_command(cmd)
+    body = result.stdout.lower()
+    if "<html" not in body and "<home-assistant" not in body:
+        raise AssertionError(f"UI page at {url} does not look like HA HTML shell")
+
+
 @dataclass(slots=True)
 class _HttpResponse:
     status_code: int
@@ -329,6 +385,26 @@ def _run_compose(
         raise AssertionError(
             "docker compose command failed:\n"
             f"cmd: {' '.join(cmd)}\n"
+            f"exit: {result.returncode}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+    return result
+
+
+def _run_command(command: list[str]) -> subprocess.CompletedProcess[str]:
+    """Run shell command and return output or raise detailed error."""
+    result = subprocess.run(
+        command,
+        cwd=_REPO_ROOT,
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        raise AssertionError(
+            "Command failed:\n"
+            f"cmd: {' '.join(command)}\n"
             f"exit: {result.returncode}\n"
             f"stdout:\n{result.stdout}\n"
             f"stderr:\n{result.stderr}"
