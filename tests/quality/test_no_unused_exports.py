@@ -7,13 +7,13 @@ import pkgutil
 from collections.abc import Iterable
 
 PUBLIC_MODULES = [
-    "ha_simple_mcp",
-    "ha_simple_mcp.models",
-    "ha_simple_mcp.catalog",
-    "ha_simple_mcp.schema",
-    "ha_simple_mcp.validation",
-    "ha_simple_mcp.proxy",
-    "ha_simple_mcp.server",
+    "ha_api_mcp",
+    "ha_api_mcp.models",
+    "ha_api_mcp.catalog",
+    "ha_api_mcp.schema",
+    "ha_api_mcp.validation",
+    "ha_api_mcp.proxy",
+    "ha_api_mcp.server",
 ]
 
 
@@ -47,6 +47,6 @@ def test_public_exports_resolve_to_real_symbols() -> None:
 
 def test_package_modules_are_importable() -> None:
     """All package modules should be importable (no dead modules)."""
-    package = importlib.import_module("ha_simple_mcp")
+    package = importlib.import_module("ha_api_mcp")
     for module_info in pkgutil.walk_packages(package.__path__, package.__name__ + "."):
         importlib.import_module(module_info.name)

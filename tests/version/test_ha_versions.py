@@ -6,10 +6,9 @@ import json
 from pathlib import Path
 
 import pytest
-
-from ha_simple_mcp.catalog import build_scope
-from ha_simple_mcp.models import ApiEndpoint
-from ha_simple_mcp.schema import build_tools_schema
+from ha_api_mcp.catalog import build_scope
+from ha_api_mcp.models import ApiEndpoint
+from ha_api_mcp.schema import build_tools_schema
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 

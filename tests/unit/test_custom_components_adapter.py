@@ -127,6 +127,25 @@ def test_constants_contract() -> None:
 
 def test_compatibility_reexports() -> None:
     """Ensure compatibility modules re-export expected package symbols."""
+    from ha_api_mcp import (
+        catalog as core_catalog,
+    )
+    from ha_api_mcp import (
+        models as core_models,
+    )
+    from ha_api_mcp import (
+        proxy as core_proxy,
+    )
+    from ha_api_mcp import (
+        schema as core_schema,
+    )
+    from ha_api_mcp import (
+        server as core_server,
+    )
+    from ha_api_mcp import (
+        validation as core_validation,
+    )
+
     from custom_components.ha_simple_mcp import (
         catalog as compat_catalog,
     )
@@ -144,24 +163,6 @@ def test_compatibility_reexports() -> None:
     )
     from custom_components.ha_simple_mcp import (
         validation as compat_validation,
-    )
-    from ha_simple_mcp import (
-        catalog as core_catalog,
-    )
-    from ha_simple_mcp import (
-        models as core_models,
-    )
-    from ha_simple_mcp import (
-        proxy as core_proxy,
-    )
-    from ha_simple_mcp import (
-        schema as core_schema,
-    )
-    from ha_simple_mcp import (
-        server as core_server,
-    )
-    from ha_simple_mcp import (
-        validation as core_validation,
     )
 
     assert compat_catalog.ApiCatalog is core_catalog.ApiCatalog

@@ -4,14 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ha_api_mcp.catalog import ApiCatalog
+from ha_api_mcp.models import McpSettings
+from ha_api_mcp.proxy import ApiProxy
+from ha_api_mcp.schema import SchemaCache
+from ha_api_mcp.server import McpHttpServer
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-
-from ha_simple_mcp.catalog import ApiCatalog
-from ha_simple_mcp.models import McpSettings
-from ha_simple_mcp.proxy import ApiProxy
-from ha_simple_mcp.schema import SchemaCache
-from ha_simple_mcp.server import McpHttpServer
 
 from .const import (
     CONF_BIND_ADDRESS,

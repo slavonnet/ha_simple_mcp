@@ -10,6 +10,6 @@
   "config_flow": true,
   "iot_class": "local_push",
   "requirements": [
-    "ha-simple-mcp==0.1.0"
+    "ha-api-mcp @ git+https://github.com/slavonnet/ha-api-mcp.git@v0.1.0"
   ]
 }

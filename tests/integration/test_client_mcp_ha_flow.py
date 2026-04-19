@@ -5,11 +5,10 @@ from __future__ import annotations
 import pytest
 from aiohttp import ClientSession, web
 from aiohttp.test_utils import TestServer
-
-from ha_simple_mcp.models import ApiEndpoint, ApiParameter, McpSettings
-from ha_simple_mcp.proxy import ApiProxy
-from ha_simple_mcp.schema import SchemaCache
-from ha_simple_mcp.server import McpHttpServer
+from ha_api_mcp.models import ApiEndpoint, ApiParameter, McpSettings
+from ha_api_mcp.proxy import ApiProxy
+from ha_api_mcp.schema import SchemaCache
+from ha_api_mcp.server import McpHttpServer
 
 
 class _Catalog:

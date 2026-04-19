@@ -1,24 +1,23 @@
 # Packaging and release model
 
-This repository ships **two artifacts from one codebase**:
+This repository ships one main artifact:
 
 1. Home Assistant HACS custom component (`custom_components/ha_simple_mcp`)
-2. Reusable Python package (`src/ha_simple_mcp`)
+
+and consumes reusable MCP core as an external dependency:
+
+- Python package `ha-api-mcp` (`ha_api_mcp` import namespace)
 
 ## Reuse strategy
 
-- Core MCP logic lives in `src/ha_simple_mcp`:
-  - endpoint catalog
-  - schema generation + cache
-  - validation
-  - proxy
-  - MCP server
-- HACS integration imports core modules and adds HA-specific runtime/config flow.
+- Core MCP logic lives in external repository/package:
+  - https://github.com/slavonnet/ha-api-mcp
+- HACS integration imports `ha_api_mcp.*` modules and adds HA-specific runtime/config flow.
 
 ## Release strategy
 
-- HACS release: GitHub release tags consumed by HACS.
-- Python package release: build and publish from same tag.
+- HACS release: GitHub release tags consumed by HACS in this repo.
+- Python package release: independent in `ha-api-mcp` repository.
 
 Recommended semantic versioning:
 

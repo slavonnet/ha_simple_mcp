@@ -1,5 +1,5 @@
-from ha_simple_mcp.models import ApiEndpoint, ApiParameter
-from ha_simple_mcp.schema import SchemaCache, build_tools_schema
+from ha_api_mcp.models import ApiEndpoint, ApiParameter
+from ha_api_mcp.schema import SchemaCache, build_tools_schema
 
 
 def test_build_tools_schema_contains_required_metadata() -> None:

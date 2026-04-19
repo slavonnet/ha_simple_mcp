@@ -4,11 +4,10 @@ from unittest.mock import AsyncMock
 
 import pytest
 from aiohttp.test_utils import TestClient, TestServer
-
-from ha_simple_mcp.models import ApiEndpoint, ApiParameter, McpSettings
-from ha_simple_mcp.proxy import ProxyError
-from ha_simple_mcp.schema import SchemaCache, build_tools_schema
-from ha_simple_mcp.server import McpHttpServer, normalize_scopes
+from ha_api_mcp.models import ApiEndpoint, ApiParameter, McpSettings
+from ha_api_mcp.proxy import ProxyError
+from ha_api_mcp.schema import SchemaCache, build_tools_schema
+from ha_api_mcp.server import McpHttpServer, normalize_scopes
 
 
 class _Catalog:
@@ -551,7 +550,7 @@ async def test_stop_without_start_is_noop() -> None:
 
 
 def test_catalog_like_base_raises_not_implemented() -> None:
-    from ha_simple_mcp.server import _CatalogLike
+    from ha_api_mcp.server import _CatalogLike
 
     catalog = _CatalogLike()
     with pytest.raises(NotImplementedError):
