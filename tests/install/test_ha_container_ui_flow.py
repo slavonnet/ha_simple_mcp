@@ -27,6 +27,7 @@ _HA_CLIENT_ID = f"{_HA_BASE_URL}/"
 _TEST_USERNAME = "cursor-e2e"
 _TEST_PASSWORD = "cursor-e2e-pass"
 _TEST_DISPLAY_NAME = "Cursor E2E"
+_COMPOSE_PROJECT_NAME = "ha_simple_mcp_install_e2e"
 
 SettingsPayload = dict[str, int | bool | str | list[str]]
 
@@ -35,14 +36,13 @@ pytestmark = pytest.mark.install
 
 def test_ha_container_ui_add_integration_and_change_settings() -> None:
     """Boot HA container and verify add + options update through UI flow API."""
-    if os.getenv("RUN_INSTALL_TESTS") != "1":
-        pytest.skip("Set RUN_INSTALL_TESTS=1 to run Docker-based install E2E tests")
-    if shutil.which("docker") is None:
-        pytest.skip("Docker CLI is required for install E2E tests")
+    _require_command("docker")
+    _require_command("wget")
 
     compose_env = os.environ.copy()
     compose_env["HA_CONFIG_DIR"] = str(_CONFIG_DIR)
     compose_env["HA_HOST_PORT"] = str(_HA_PORT)
+    compose_env["COMPOSE_PROJECT_NAME"] = _COMPOSE_PROJECT_NAME
 
     _ensure_clean_config_dir(_CONFIG_DIR)
     _run_compose(["down", "--volumes", "--remove-orphans"], env=compose_env, check=False)
@@ -55,6 +55,7 @@ def test_ha_container_ui_add_integration_and_change_settings() -> None:
         _finish_onboarding(access_token)
 
         entry_id = _create_integration_entry(access_token)
+        _walk_user_case_to_settings_with_wget(access_token, entry_id)
         updated = _update_integration_options(access_token, entry_id)
 
         data = cast(SettingsPayload, updated["data"])
@@ -240,6 +241,87 @@ def _auth_headers(access_token: str) -> dict[str, str]:
     }
 
 
+def _walk_user_case_to_settings_with_wget(
+    access_token: str,
+    entry_id: str,
+) -> None:
+    """Go from main UI to integration settings and verify settings availability."""
+    _assert_wget_html_page(f"{_HA_BASE_URL}/", access_token=access_token)
+    _assert_wget_html_page(f"{_HA_BASE_URL}/config/dashboard", access_token=access_token)
+    _assert_wget_html_page(
+        f"{_HA_BASE_URL}/config/integrations/dashboard",
+        access_token=access_token,
+    )
+    _assert_wget_html_page(
+        f"{_HA_BASE_URL}/config/integrations/integration/{entry_id}",
+        access_token=access_token,
+    )
+
+    entries_url = f"{_HA_BASE_URL}/api/config/config_entries/entry?domain=ha_simple_mcp"
+    entries = _wget_json_request("GET", entries_url, access_token=access_token)
+    entry = _find_entry_fragment(entries, entry_id=entry_id)
+    if entry.get("supports_options") is not True:
+        raise AssertionError(
+            "Expected supports_options=true for component settings button visibility"
+        )
+
+    settings_url = f"{_HA_BASE_URL}/config/integrations/integration/{entry_id}"
+    _assert_wget_html_page(settings_url, access_token=access_token)
+
+
+def _assert_wget_html_page(url: str, *, access_token: str) -> None:
+    """Fetch one UI page with wget and assert basic HTML payload exists."""
+    cmd = [
+        "wget",
+        "-q",
+        "--timeout=15",
+        "-O",
+        "-",
+        "--header",
+        f"Authorization: Bearer {access_token}",
+        url,
+    ]
+    result = _run_command(cmd)
+    body = result.stdout.lower()
+    if "<html" not in body and "<home-assistant" not in body:
+        raise AssertionError(f"UI page at {url} does not look like HA HTML shell")
+
+
+def _wget_json_request(
+    method: str,
+    url: str,
+    *,
+    access_token: str,
+) -> Any:
+    """Call one HA endpoint through wget and parse JSON response."""
+    cmd = [
+        "wget",
+        "-q",
+        "--timeout=15",
+        "-O",
+        "-",
+        "--header",
+        f"Authorization: Bearer {access_token}",
+    ]
+    if method != "GET":
+        raise AssertionError(f"Unsupported wget JSON method: {method}")
+    cmd.append(url)
+    result = _run_command(cmd)
+    return json.loads(result.stdout)
+
+
+def _find_entry_fragment(payload: Any, *, entry_id: str) -> dict[str, Any]:
+    """Find one config entry object by entry_id in list payload."""
+    if not isinstance(payload, list):
+        raise AssertionError("Expected config entries payload to be a JSON list")
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("entry_id", "")) == entry_id:
+            return item
+    raise AssertionError(f"Config entry {entry_id} not found in config entries payload")
+
+
 @dataclass(slots=True)
 class _HttpResponse:
     status_code: int
@@ -317,18 +399,44 @@ def _run_compose(
 ) -> subprocess.CompletedProcess[str]:
     """Run docker compose command from install test directory."""
     cmd = ["docker", "compose", "-f", str(_COMPOSE_FILE), *args]
-    result = subprocess.run(
-        cmd,
-        cwd=_REPO_ROOT,
-        env=env,
-        check=False,
-        text=True,
-        capture_output=True,
-    )
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=_REPO_ROOT,
+            env=env,
+            check=False,
+            text=True,
+            capture_output=True,
+        )
+    except FileNotFoundError as error:
+        raise AssertionError("docker command is required for full install E2E test") from error
     if check and result.returncode != 0:
         raise AssertionError(
             "docker compose command failed:\n"
             f"cmd: {' '.join(cmd)}\n"
+            f"exit: {result.returncode}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+    return result
+
+
+def _run_command(command: list[str]) -> subprocess.CompletedProcess[str]:
+    """Run shell command and return output or raise detailed error."""
+    try:
+        result = subprocess.run(
+            command,
+            cwd=_REPO_ROOT,
+            check=False,
+            text=True,
+            capture_output=True,
+        )
+    except FileNotFoundError as error:
+        raise AssertionError(f"Command is required but not found: {command[0]}") from error
+    if result.returncode != 0:
+        raise AssertionError(
+            "Command failed:\n"
+            f"cmd: {' '.join(command)}\n"
             f"exit: {result.returncode}\n"
             f"stdout:\n{result.stdout}\n"
             f"stderr:\n{result.stderr}"
@@ -347,3 +455,11 @@ def _remove_dir(path: pathlib.Path) -> None:
     if not path.exists():
         return
     shutil.rmtree(path)
+
+
+def _require_command(command: str) -> None:
+    """Fail fast when required binary is not available."""
+    if shutil.which(command) is None:
+        raise AssertionError(f"Required command is missing: {command}")
+
+
