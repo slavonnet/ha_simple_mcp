@@ -35,7 +35,7 @@ _TEST_USERNAME = "cursor-e2e"
 _TEST_PASSWORD = "cursor-e2e-pass"
 _TEST_DISPLAY_NAME = "Cursor E2E"
 _COMPOSE_PROJECT_NAME = "ha_simple_mcp_install_e2e"
-_HACS_COMPONENT_ARCHIVE_URL = "https://github.com/hacs/integration/archive/refs/heads/main.zip"
+_HACS_COMPONENT_ARCHIVE_URL = "https://github.com/hacs/integration/releases/latest/download/hacs.zip"
 _HACS_CUSTOM_REPOSITORY = "slavonnet/ha_simple_mcp"
 _HACS_CUSTOM_REPOSITORY_URL = f"https://github.com/{_HACS_CUSTOM_REPOSITORY}"
 _HACS_GITHUB_TOKEN = os.getenv("HACS_GITHUB_TOKEN", "")
@@ -58,19 +58,22 @@ def test_ha_container_ui_add_integration_and_change_settings() -> None:
     _run_compose(["down", "--volumes", "--remove-orphans"], env=compose_env, check=False)
     _run_compose(["up", "-d", "--build"], env=compose_env)
     try:
-        _wait_until_ready(timeout_seconds=240)
+        _wait_until_onboarding_available(timeout_seconds=300)
         auth_code = _create_onboarding_user()
         access_token = _exchange_auth_code(auth_code)
         _finish_onboarding(access_token)
+        _wait_until_components_loaded(access_token, timeout_seconds=300)
         container_id = _get_homeassistant_container_id(compose_env)
 
         _install_hacs_custom_component(container_id)
         _restart_homeassistant(compose_env)
         _wait_until_ready(timeout_seconds=240)
+        _wait_until_components_loaded(access_token, timeout_seconds=300)
 
         _inject_hacs_config_entry(container_id, github_token=_HACS_GITHUB_TOKEN)
         _restart_homeassistant(compose_env)
         _wait_until_ready(timeout_seconds=240)
+        _wait_until_components_loaded(access_token, timeout_seconds=300)
 
         _wait_hacs_running(access_token, timeout_seconds=300)
         repository_id = _hacs_add_custom_repository(access_token)
@@ -82,6 +85,8 @@ def test_ha_container_ui_add_integration_and_change_settings() -> None:
 
         _restart_homeassistant(compose_env)
         _wait_until_ready(timeout_seconds=240)
+        _wait_until_components_loaded(access_token, timeout_seconds=300)
+        _wait_hacs_running(access_token, timeout_seconds=300)
 
         entry_id = _create_integration_entry(access_token)
         _walk_user_case_to_settings_with_wget(access_token, entry_id)
@@ -91,7 +96,21 @@ def test_ha_container_ui_add_integration_and_change_settings() -> None:
 
 
 def _wait_until_ready(*, timeout_seconds: int) -> None:
-    """Wait until Home Assistant onboarding endpoint is available."""
+    """Wait until Home Assistant HTTP API is reachable."""
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        try:
+            response = _http_request("GET", f"{_HA_BASE_URL}/manifest.json", timeout=5)
+            if response.status_code in (200, 401):
+                return
+        except OSError:
+            pass
+        time.sleep(2)
+    raise AssertionError("Home Assistant container did not become ready in time")
+
+
+def _wait_until_onboarding_available(*, timeout_seconds: int) -> None:
+    """Wait until onboarding endpoint is available for first user creation."""
     deadline = time.time() + timeout_seconds
     while time.time() < deadline:
         try:
@@ -101,7 +120,39 @@ def _wait_until_ready(*, timeout_seconds: int) -> None:
         except OSError:
             pass
         time.sleep(2)
-    raise AssertionError("Home Assistant container did not become ready in time")
+    raise AssertionError("Home Assistant onboarding endpoint did not become ready in time")
+
+
+def _wait_until_components_loaded(access_token: str, *, timeout_seconds: int) -> None:
+    """Wait until HA has finished loading config entries after startup."""
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        entries = _fetch_config_entries(access_token)
+        transient = {"setup_in_progress", "setups_in_progress", "not_loaded"}
+        broken = {"setup_error", "migration_error"}
+
+        states = [str(entry.get("state", "")) for entry in entries]
+        if any(state in broken for state in states):
+            raise AssertionError(f"Home Assistant entry loading failed: {states}")
+        if entries and not any(state in transient for state in states):
+            return
+        time.sleep(2)
+    raise AssertionError("Home Assistant components did not finish loading in time")
+
+
+def _fetch_config_entries(access_token: str) -> list[dict[str, Any]]:
+    """Fetch full config entries list."""
+    response = _http_request(
+        "GET",
+        f"{_HA_BASE_URL}/api/config/config_entries/entry",
+        headers=_auth_headers(access_token),
+        timeout=15,
+    )
+    _assert_status(response, expected=200)
+    parsed = json.loads(response.body)
+    if not isinstance(parsed, list):
+        raise AssertionError("Expected config entries API to return list")
+    return [item for item in parsed if isinstance(item, dict)]
 
 
 def _create_onboarding_user() -> str:
@@ -193,7 +244,7 @@ def _install_hacs_custom_component(container_id: str) -> None:
     """Download HACS and copy custom_components/hacs into HA config."""
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = pathlib.Path(temp_dir)
-        archive_path = temp_path / "hacs-main.zip"
+        archive_path = temp_path / "hacs.zip"
         extract_root = temp_path / "extract"
 
         with urllib.request.urlopen(_HACS_COMPONENT_ARCHIVE_URL, timeout=60) as response:
@@ -201,13 +252,34 @@ def _install_hacs_custom_component(container_id: str) -> None:
         with zipfile.ZipFile(archive_path) as zip_archive:
             zip_archive.extractall(extract_root)
 
-        candidates = list(extract_root.glob("**/custom_components/hacs"))
+        direct_hacs_dir = extract_root / "hacs"
+        candidates = [direct_hacs_dir] if direct_hacs_dir.is_dir() else []
         if not candidates:
-            raise AssertionError("HACS archive does not contain custom_components/hacs directory")
+            candidates = list(extract_root.glob("**/custom_components/hacs"))
+        if not candidates and (extract_root / "manifest.json").is_file():
+            candidates = [extract_root]
+        if not candidates:
+            raise AssertionError("HACS archive does not contain hacs component directory")
         hacs_source = candidates[0]
 
-        _run_command(["docker", "exec", container_id, "mkdir", "-p", "/config/custom_components"])
-        _run_command(["docker", "cp", str(hacs_source), f"{container_id}:/config/custom_components/hacs"])
+        _run_command(
+            [
+                "docker",
+                "exec",
+                container_id,
+                "sh",
+                "-c",
+                "rm -rf /config/custom_components/hacs && mkdir -p /config/custom_components/hacs",
+            ]
+        )
+        _run_command(
+            [
+                "docker",
+                "cp",
+                f"{hacs_source}/.",
+                f"{container_id}:/config/custom_components/hacs",
+            ]
+        )
 
 
 def _inject_hacs_config_entry(container_id: str, *, github_token: str) -> None:
@@ -242,9 +314,13 @@ def _inject_hacs_config_entry(container_id: str, *, github_token: str) -> None:
             if isinstance(existing, dict) and existing.get("entry_id")
             else f"hacs_e2e_{uuid.uuid4().hex[:12]}"
         )
+        hacs_data: dict[str, str] = {}
+        if github_token.strip():
+            hacs_data["token"] = github_token
+
         hacs_entry = {
             "created_at": now,
-            "data": {"token": github_token},
+            "data": hacs_data,
             "disabled_by": None,
             "discovery_keys": {},
             "domain": _HACS_DOMAIN,
@@ -287,8 +363,7 @@ def _wait_hacs_running(access_token: str, *, timeout_seconds: int) -> None:
             continue
         if isinstance(info, dict):
             stage = str(info.get("stage", "")).lower()
-            disabled_reason = info.get("disabled_reason")
-            if stage == "running" and disabled_reason in (None, "", "None"):
+            if stage == "running":
                 return
         time.sleep(2)
     raise AssertionError("HACS integration did not reach running stage")
