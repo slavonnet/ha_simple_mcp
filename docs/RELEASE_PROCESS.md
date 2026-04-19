@@ -33,6 +33,10 @@ This repository uses a **release-via-PR** workflow.
 
 3. Open PR from `release/X.Y.Z` to `main`.
 
+   `Release PR Check` now auto-runs `scripts/release_bump.py X.Y.Z` in the
+   release branch and pushes synchronized files back into the PR (manifest,
+   README, and dependency pins) when drift is detected.
+
 4. CI checks:
    - `CI` workflow (lint, mypy, tests, 100% coverage)
    - `Security Audit` workflow (`pip-audit --strict`)
