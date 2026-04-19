@@ -35,12 +35,8 @@ pytestmark = pytest.mark.install
 
 def test_ha_container_ui_add_integration_and_change_settings() -> None:
     """Boot HA container and verify add + options update through UI flow API."""
-    if os.getenv("RUN_INSTALL_TESTS") != "1":
-        pytest.skip("Set RUN_INSTALL_TESTS=1 to run Docker-based install E2E tests")
-    if shutil.which("docker") is None:
-        pytest.skip("Docker CLI is required for install E2E tests")
-    if shutil.which("wget") is None:
-        pytest.skip("wget is required for UI user-case checks")
+    _require_command("docker")
+    _require_command("wget")
 
     compose_env = os.environ.copy()
     compose_env["HA_CONFIG_DIR"] = str(_CONFIG_DIR)
@@ -420,14 +416,17 @@ def _run_compose(
 ) -> subprocess.CompletedProcess[str]:
     """Run docker compose command from install test directory."""
     cmd = ["docker", "compose", "-f", str(_COMPOSE_FILE), *args]
-    result = subprocess.run(
-        cmd,
-        cwd=_REPO_ROOT,
-        env=env,
-        check=False,
-        text=True,
-        capture_output=True,
-    )
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=_REPO_ROOT,
+            env=env,
+            check=False,
+            text=True,
+            capture_output=True,
+        )
+    except FileNotFoundError as error:
+        raise AssertionError("docker command is required for full install E2E test") from error
     if check and result.returncode != 0:
         raise AssertionError(
             "docker compose command failed:\n"
@@ -441,13 +440,16 @@ def _run_compose(
 
 def _run_command(command: list[str]) -> subprocess.CompletedProcess[str]:
     """Run shell command and return output or raise detailed error."""
-    result = subprocess.run(
-        command,
-        cwd=_REPO_ROOT,
-        check=False,
-        text=True,
-        capture_output=True,
-    )
+    try:
+        result = subprocess.run(
+            command,
+            cwd=_REPO_ROOT,
+            check=False,
+            text=True,
+            capture_output=True,
+        )
+    except FileNotFoundError as error:
+        raise AssertionError(f"Command is required but not found: {command[0]}") from error
     if result.returncode != 0:
         raise AssertionError(
             "Command failed:\n"
@@ -470,3 +472,9 @@ def _remove_dir(path: pathlib.Path) -> None:
     if not path.exists():
         return
     shutil.rmtree(path)
+
+
+def _require_command(command: str) -> None:
+    """Fail fast when required binary is not available."""
+    if shutil.which(command) is None:
+        raise AssertionError(f"Required command is missing: {command}")
