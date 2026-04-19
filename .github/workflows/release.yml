@@ -48,16 +48,25 @@ jobs:
 
           tag_version = release_tag.removeprefix("v")
           pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
-          project_version = pyproject["project"]["version"]
+          project = pyproject["project"]
+          dynamic_versions = set(project.get("dynamic", []))
+          scm_config = pyproject.get("tool", {}).get("setuptools_scm")
+          if "version" not in dynamic_versions:
+              raise SystemExit(
+                  "pyproject must use dynamic package version from git tags via project.dynamic"
+              )
+          if "version" in project:
+              raise SystemExit(
+                  "project.version must be omitted when dynamic versioning is enabled"
+              )
+          if not isinstance(scm_config, dict):
+              raise SystemExit("tool.setuptools_scm config is required for dynamic tag versions")
+
           manifest = json.loads(
               Path("custom_components/ha_simple_mcp/manifest.json").read_text(encoding="utf-8")
           )
           manifest_version = manifest["version"]
 
-          if project_version != tag_version:
-              raise SystemExit(
-                  f"pyproject version '{project_version}' does not match tag '{tag_version}'"
-              )
           if manifest_version != tag_version:
               raise SystemExit(
                   f"manifest version '{manifest_version}' does not match tag '{tag_version}'"

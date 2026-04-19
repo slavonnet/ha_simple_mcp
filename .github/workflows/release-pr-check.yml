@@ -48,16 +48,23 @@ jobs:
           target_version = suffix
 
           pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
-          project_version = pyproject["project"]["version"]
+          dynamic_version_enabled = "version" in pyproject["project"].get("dynamic", [])
+          project_version = pyproject["project"].get("version")
           manifest = json.loads(
               Path("custom_components/ha_simple_mcp/manifest.json").read_text(encoding="utf-8")
           )
           manifest_version = manifest["version"]
 
-          if project_version != target_version:
-              raise SystemExit(
-                  f"pyproject version '{project_version}' must equal release version '{target_version}'"
-              )
+          if dynamic_version_enabled:
+              if "version" in pyproject["project"]:
+                  raise SystemExit(
+                      "project.version must be omitted when setuptools_scm dynamic versioning is enabled"
+                  )
+          else:
+              if project_version != target_version:
+                  raise SystemExit(
+                      f"pyproject version '{project_version}' must equal release version '{target_version}'"
+                  )
           if manifest_version != target_version:
               raise SystemExit(
                   f"manifest version '{manifest_version}' must equal release version '{target_version}'"

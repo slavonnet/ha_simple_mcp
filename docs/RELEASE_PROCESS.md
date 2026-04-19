@@ -24,16 +24,18 @@ This repository uses a **release-via-PR** workflow.
    ```
 
    This updates:
-   - `pyproject.toml` -> `project.version`
    - `custom_components/ha_simple_mcp/manifest.json` -> `version`
    - pin of external dependency `ha-api-mcp` tag to `vX.Y.Z`
+
+   Note: package version in `pyproject.toml` is now dynamic (from git tags via
+   `setuptools_scm`), so no manual bump is required there.
 
 3. Open PR from `release/X.Y.Z` to `main`.
 
 4. CI checks:
    - `CI` workflow (lint, mypy, tests, 100% coverage)
    - `Security Audit` workflow (`pip-audit --strict`)
-   - `Release PR Check` workflow (ensures branch name and versions are aligned)
+   - `Release PR Check` workflow (ensures release branch name and manifest are aligned)
 
    Note: dependency audit runs in an isolated clean environment against the
    project dependency graph, including externally pinned `ha-api-mcp`.
@@ -50,7 +52,7 @@ This repository uses a **release-via-PR** workflow.
    ```
 
    Tag push triggers `Release` workflow:
-   - validates that tag matches versions in files
+   - validates that tag matches `manifest.json` version
    - builds `dist/ha_simple_mcp.zip` artifact for HACS release
    - publishes `ha_simple_mcp.zip` as GitHub Release asset
 

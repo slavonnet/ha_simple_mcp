@@ -1,13 +1,13 @@
-"""Update project versions for a release PR.
+"""Update release-related versions for a release PR.
 
 Usage:
     python scripts/release_bump.py 0.1.1
 
 The script updates:
-    - ``pyproject.toml`` -> ``project.version``
     - ``custom_components/ha_simple_mcp/manifest.json`` -> ``version``
-    - ``custom_components/ha_simple_mcp/manifest.json`` requirement pin for
-      ``ha-api-mcp`` git tag (``@vX.Y.Z``)
+    - dependency pin for ``ha-api-mcp`` git tag (``@vX.Y.Z``) in both:
+      - ``pyproject.toml``
+      - ``custom_components/ha_simple_mcp/manifest.json``
 """
 
 from __future__ import annotations
@@ -20,14 +20,6 @@ from pathlib import Path
 SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
 PYPROJECT_PATH = Path("pyproject.toml")
 MANIFEST_PATH = Path("custom_components/ha_simple_mcp/manifest.json")
-
-
-def _replace_pyproject_version(content: str, version: str) -> str:
-    """Replace ``project.version`` in pyproject content."""
-    pattern = re.compile(r'(?m)^version = "(\d+\.\d+\.\d+)"$')
-    if not pattern.search(content):
-        raise ValueError("project.version not found in pyproject.toml")
-    return pattern.sub(f'version = "{version}"', content, count=1)
 
 
 def _bump_manifest(version: str) -> None:
@@ -54,9 +46,8 @@ def _bump_manifest(version: str) -> None:
 
 
 def _bump_pyproject(version: str) -> None:
-    """Update pyproject version and dependency tag pin."""
+    """Update pyproject dependency tag pin."""
     content = PYPROJECT_PATH.read_text(encoding="utf-8")
-    content = _replace_pyproject_version(content, version)
     content = re.sub(
         r"(ha-api-mcp\s*@\s*git\+https://github\.com/slavonnet/ha-api-mcp\.git@)v\d+\.\d+\.\d+",
         rf"\1v{version}",
