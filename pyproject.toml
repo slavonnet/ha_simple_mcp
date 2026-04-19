@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
   "aiohttp>=3.10.0",
-  "ha-api-mcp @ git+https://github.com/slavonnet/ha-api-mcp.git@v0.1.1",
+  "ha-api-mcp @ git+https://github.com/slavonnet/ha-api-mcp.git@v1.1.1",
 ]
 classifiers = [
   "Programming Language :: Python :: 3",
