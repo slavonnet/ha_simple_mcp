@@ -1,15 +1,13 @@
 services:
   homeassistant:
-    build:
-      context: ../..
-      dockerfile: tests/install/Dockerfile
-    image: ha-simple-mcp-test:local
+    image: ghcr.io/home-assistant/home-assistant:stable
     restart: "no"
     network_mode: bridge
     ports:
       - "${HA_HOST_PORT:-18123}:8123"
     volumes:
       - ha_simple_mcp_config:/config
+      - ../../custom_components/ha_simple_mcp:/config/custom_components/ha_simple_mcp:ro
 
 volumes:
   ha_simple_mcp_config:

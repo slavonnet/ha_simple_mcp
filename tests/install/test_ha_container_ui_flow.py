@@ -56,17 +56,17 @@ def test_ha_container_ui_add_integration_and_change_settings() -> None:
 
         entry_id = _create_integration_entry(access_token)
         _walk_user_case_to_settings_with_wget(access_token, entry_id)
-        updated = _update_integration_options(access_token, entry_id)
+        _update_integration_options(access_token, entry_id)
+        defaults = _read_integration_options_defaults(access_token, entry_id)
 
-        data = cast(SettingsPayload, updated["data"])
-        assert data["listen_host"] == "127.0.0.1"
-        assert data["listen_port"] == 8126
-        assert data["auth_token"] == "changed-token"
-        assert data["ha_user"] == _TEST_DISPLAY_NAME
-        assert data["read_only"] is True
-        assert data["timeout"] == 22
-        assert data["schema_cache_ttl"] == 900
-        assert data["allowed_scopes"] == ["ha.api.get.*", "ha.api.post.*"]
+        assert defaults["listen_host"] == "127.0.0.1"
+        assert defaults["listen_port"] == 8126
+        assert defaults["auth_token"] == "changed-token"
+        assert defaults["ha_user"] == _TEST_DISPLAY_NAME
+        assert defaults["read_only"] is True
+        assert defaults["timeout"] == 22
+        assert defaults["schema_cache_ttl"] == 900
+        assert defaults["allowed_scopes"] == ["ha.api.get.*", "ha.api.post.*"]
     finally:
         _run_compose(["down", "--volumes", "--remove-orphans"], env=compose_env, check=False)
         _remove_dir(_CONFIG_DIR)
@@ -231,6 +231,40 @@ def _update_integration_options(access_token: str, entry_id: str) -> dict[str, A
     finish_data = _json_body(finish)
     assert finish_data["type"] == "create_entry"
     return finish_data
+
+
+def _read_integration_options_defaults(access_token: str, entry_id: str) -> SettingsPayload:
+    """Read current options defaults from options flow form schema."""
+    headers = _auth_headers(access_token)
+    start = _http_request(
+        "POST",
+        f"{_HA_BASE_URL}/api/config/config_entries/options/flow",
+        headers=headers,
+        json_payload={"handler": entry_id},
+        timeout=15,
+    )
+    _assert_status(start, expected=200)
+    payload = _json_body(start)
+    schema = payload.get("data_schema")
+    if not isinstance(schema, list):
+        raise AssertionError("Expected options flow data_schema as list")
+
+    defaults: SettingsPayload = {}
+    for field in schema:
+        if not isinstance(field, dict):
+            continue
+        name = field.get("name")
+        if not isinstance(name, str) or "default" not in field:
+            continue
+        defaults[name] = cast(int | bool | str | list[str], field["default"])
+
+    defaults["allowed_scopes"] = _split_scope_csv(str(defaults.get("allowed_scopes", "")))
+    return defaults
+
+
+def _split_scope_csv(value: str) -> list[str]:
+    """Convert scope CSV into normalized list for assertions."""
+    return [scope.strip() for scope in value.split(",") if scope.strip()]
 
 
 def _auth_headers(access_token: str) -> dict[str, str]:
