@@ -1,0 +1,7 @@
+[
+  {"method": "GET", "path": "/api/"},
+  {"method": "GET", "path": "/api/config"},
+  {"method": "POST", "path": "/api/services/{domain}/{service}"},
+  {"method": "GET", "path": "/api/states"},
+  {"method": "GET", "path": "/api/states/{entity_id}"}
+]

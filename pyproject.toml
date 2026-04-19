@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ha-simple-mcp"
+version = "0.1.0"
+description = "Home Assistant HACS integration exposing MCP tools server."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "aiohttp>=3.10.0",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest>=8.2.0",
+  "pytest-asyncio>=0.23.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = [
+  "tests",
+]
+markers = [
+  "install: tests requiring docker and live install checks",
+]

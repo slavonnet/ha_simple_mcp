@@ -1,0 +1,26 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "HA Simple MCP",
+        "description": "Configure MCP bridge options",
+        "data": {
+          "listen_host": "Listen host (empty for all interfaces)",
+          "listen_port": "Listen port",
+          "auth_token": "Authorization token (optional)",
+          "ha_user": "Home Assistant user for API access",
+          "read_only": "Allow GET requests only",
+          "timeout": "API call timeout (seconds)",
+          "allowed_scopes": "Allowed scopes (comma separated, optional)",
+          "schema_cache_ttl": "Schema cache TTL (seconds)"
+        }
+      }
+    },
+    "error": {
+      "user_not_found": "Selected user does not exist"
+    },
+    "abort": {
+      "single_instance_allowed": "Only one instance is allowed"
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "domain": "ha_simple_mcp",
+  "name": "HA Simple MCP",
+  "version": "0.1.0",
+  "documentation": "https://github.com/slavonnet/ha_simple_mcp",
+  "issue_tracker": "https://github.com/slavonnet/ha_simple_mcp/issues",
+  "codeowners": [
+    "@slavonnet"
+  ],
+  "config_flow": true,
+  "iot_class": "local_push",
+  "requirements": []
+}
