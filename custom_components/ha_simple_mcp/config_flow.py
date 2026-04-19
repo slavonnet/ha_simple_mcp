@@ -135,7 +135,7 @@ class HaSimpleMcpOptionsFlow(config_entries.OptionsFlow):
     """Handle options flow for live integration reconfiguration."""
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        self.config_entry = config_entry
+        self._config_entry = config_entry
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
         """Render and save options form."""
@@ -154,7 +154,7 @@ class HaSimpleMcpOptionsFlow(config_entries.OptionsFlow):
         users = await _list_users(self.hass)
         if not users:
             users = ["owner"]
-        defaults = {**self.config_entry.data, **self.config_entry.options}
+        defaults = {**self._config_entry.data, **self._config_entry.options}
         schema = _build_settings_schema(users=users, defaults=defaults)
         return self.async_show_form(step_id="init", data_schema=schema, errors=errors)
 
