@@ -78,6 +78,7 @@ Quality gates required to merge PR:
 
 - Roadmap: [docs/ROADMAP.md](docs/ROADMAP.md)
 - Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- Release process: [docs/RELEASE_PROCESS.md](docs/RELEASE_PROCESS.md)
 - Russian guide: [docs/USAGE_RU.md](docs/USAGE_RU.md)
 - English guide: [docs/USAGE_EN.md](docs/USAGE_EN.md)
 - Spanish guide: [docs/USAGE_ES.md](docs/USAGE_ES.md)

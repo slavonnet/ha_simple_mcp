@@ -1,0 +1,65 @@
+name: Release PR Check
+
+on:
+  pull_request:
+    paths:
+      - "pyproject.toml"
+      - "custom_components/ha_simple_mcp/manifest.json"
+      - "custom_components/ha_simple_mcp/const.py"
+
+jobs:
+  validate-release-version-bump:
+    if: startsWith(github.head_ref, 'release/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate release PR version bump
+        env:
+          GITHUB_HEAD_REF: ${{ github.head_ref }}
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          import tomllib
+
+          head_branch = os.environ.get("GITHUB_HEAD_REF", "")
+          if not head_branch.startswith("release/"):
+              raise SystemExit(f"Release PR check expects release/* branch, got {head_branch}")
+
+          suffix = head_branch.split("/", 1)[1]
+          if not re.fullmatch(r"\d+\.\d+\.\d+", suffix):
+              raise SystemExit(
+                  f"Release branch must match release/<semver>, got release/{suffix}"
+              )
+          target_version = suffix
+
+          pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+          project_version = pyproject["project"]["version"]
+          manifest = json.loads(
+              Path("custom_components/ha_simple_mcp/manifest.json").read_text(encoding="utf-8")
+          )
+          manifest_version = manifest["version"]
+
+          if project_version != target_version:
+              raise SystemExit(
+                  f"pyproject version '{project_version}' must equal release version '{target_version}'"
+              )
+          if manifest_version != target_version:
+              raise SystemExit(
+                  f"manifest version '{manifest_version}' must equal release version '{target_version}'"
+              )
+          PY
