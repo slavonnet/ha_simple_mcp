@@ -40,7 +40,7 @@ class RuntimeData:
     @classmethod
     def from_entry(cls, hass: HomeAssistant, entry: ConfigEntry) -> RuntimeData:
         """Create runtime data from config entry."""
-        data = entry.data
+        data = {**entry.data, **entry.options}
         base_url = _resolve_base_url(hass)
         settings = McpSettings(
             bind_address=str(data.get(CONF_BIND_ADDRESS, DEFAULT_BIND_ADDRESS)),

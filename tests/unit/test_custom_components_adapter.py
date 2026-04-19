@@ -51,8 +51,27 @@ def _install_homeassistant_stubs(monkeypatch: pytest.MonkeyPatch) -> None:
                 "errors": errors,
             }
 
+    class _StubOptionsFlow:
+        def async_create_entry(self, *, title: str, data: dict[str, object]) -> dict[str, object]:
+            return {"type": "create_entry", "title": title, "data": data}
+
+        def async_show_form(
+            self,
+            *,
+            step_id: str,
+            data_schema: object,
+            errors: dict[str, str],
+        ) -> dict[str, object]:
+            return {
+                "type": "form",
+                "step_id": step_id,
+                "data_schema": data_schema,
+                "errors": errors,
+            }
+
     config_entries_module.ConfigFlow = _StubConfigFlow
     config_entries_module.ConfigEntry = object
+    config_entries_module.OptionsFlow = _StubOptionsFlow
     core_module.HomeAssistant = object
     homeassistant_module.config_entries = config_entries_module
     homeassistant_module.core = core_module
@@ -196,6 +215,7 @@ async def test_runtime_data_builds_settings_and_lifecycle(monkeypatch: pytest.Mo
             "schema_cache_ttl": 15,
             "timeout": 7,
         },
+        options={},
     )
     hass = SimpleNamespace(
         http=SimpleNamespace(app=SimpleNamespace(router=SimpleNamespace(routes=lambda: []))),
@@ -204,6 +224,22 @@ async def test_runtime_data_builds_settings_and_lifecycle(monkeypatch: pytest.Mo
 
     runtime_data = runtime_module.RuntimeData.from_entry(hass, entry)
     assert runtime_data.mcp_server._settings.base_url == "http://localhost:8123"
+    assert runtime_data.mcp_server._settings.port == 8124
+    assert runtime_data.mcp_server._settings.read_only is True
+    assert runtime_data.mcp_server._settings.scope_allowlist == ("ha.api.get.*",)
+
+    entry_with_options = SimpleNamespace(
+        data=entry.data,
+        options={
+            "listen_port": 8126,
+            "read_only": False,
+            "allowed_scopes": ["ha.api.post.*"],
+        },
+    )
+    runtime_with_options = runtime_module.RuntimeData.from_entry(hass, entry_with_options)
+    assert runtime_with_options.mcp_server._settings.port == 8126
+    assert runtime_with_options.mcp_server._settings.read_only is False
+    assert runtime_with_options.mcp_server._settings.scope_allowlist == ("ha.api.post.*",)
     ssl_hass = SimpleNamespace(
         config=SimpleNamespace(api=SimpleNamespace(host="ha", port=443, use_ssl=True))
     )
@@ -348,6 +384,126 @@ async def test_config_flow_fallback_owner_without_users(monkeypatch: pytest.Monk
     flow.hass = SimpleNamespace(auth=SimpleNamespace(async_get_users=AsyncMock(return_value=[])))
 
     form = await flow.async_step_user()
+    target_user_key = next(
+        key
+        for key in form["data_schema"].schema
+        if isinstance(key, tuple) and key[0] == "required" and key[1] == module.CONF_TARGET_USER
+    )
+    assert target_user_key[2] == "owner"
+
+
+@pytest.mark.asyncio
+async def test_options_flow_uses_entry_defaults_and_updates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Cover options flow defaults and successful options save."""
+    _install_homeassistant_stubs(monkeypatch)
+    _install_voluptuous_stub(monkeypatch)
+    module = _import_fresh("custom_components.ha_simple_mcp.config_flow")
+
+    auth = SimpleNamespace(
+        async_get_users=AsyncMock(return_value=[SimpleNamespace(name="owner", is_active=True)])
+    )
+    hass = SimpleNamespace(auth=auth)
+    entry = SimpleNamespace(
+        data={
+            module.CONF_BIND_ADDRESS: "0.0.0.0",
+            module.CONF_PORT: 8124,
+            module.CONF_TOKEN: "",
+            module.CONF_TARGET_USER: "owner",
+            module.CONF_READ_ONLY: False,
+            module.CONF_TIMEOUT: 15,
+            module.CONF_SCHEMA_CACHE_TTL: 300,
+            module.CONF_SCOPE_ALLOWLIST: ["ha.api.get.*"],
+        },
+        options={module.CONF_PORT: 9001},
+    )
+    flow = module.HaSimpleMcpOptionsFlow(entry)
+    flow.hass = hass
+    form = await flow.async_step_init()
+    assert form["type"] == "form"
+    assert form["errors"] == {}
+
+    saved = await flow.async_step_init(
+        {
+            module.CONF_BIND_ADDRESS: "127.0.0.1",
+            module.CONF_PORT: 8126,
+            module.CONF_TOKEN: "next-token",
+            module.CONF_TARGET_USER: "owner",
+            module.CONF_READ_ONLY: True,
+            module.CONF_SCOPE_ALLOWLIST: "ha.api.get.*,ha.api.post.*",
+            module.CONF_TIMEOUT: 25,
+            module.CONF_SCHEMA_CACHE_TTL: 1200,
+        }
+    )
+    assert saved["data"][module.CONF_PORT] == 8126
+    assert saved["data"][module.CONF_TOKEN] == "next-token"
+    assert saved["data"][module.CONF_SCOPE_ALLOWLIST] == ["ha.api.get.*", "ha.api.post.*"]
+
+
+@pytest.mark.asyncio
+async def test_options_flow_rejects_unknown_user(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ensure options flow keeps form open when selected user is missing."""
+    _install_homeassistant_stubs(monkeypatch)
+    _install_voluptuous_stub(monkeypatch)
+    module = _import_fresh("custom_components.ha_simple_mcp.config_flow")
+
+    auth = SimpleNamespace(
+        async_get_users=AsyncMock(return_value=[SimpleNamespace(name="owner", is_active=True)])
+    )
+    flow = module.HaSimpleMcpOptionsFlow(SimpleNamespace(data={}, options={}))
+    flow.hass = SimpleNamespace(auth=auth)
+
+    result = await flow.async_step_init(
+        {
+            module.CONF_BIND_ADDRESS: "",
+            module.CONF_PORT: 8124,
+            module.CONF_TOKEN: "",
+            module.CONF_TARGET_USER: "missing",
+            module.CONF_READ_ONLY: False,
+            module.CONF_SCOPE_ALLOWLIST: "",
+            module.CONF_TIMEOUT: 10,
+            module.CONF_SCHEMA_CACHE_TTL: 120,
+        }
+    )
+    assert result["type"] == "form"
+    assert result["errors"]["base"] == "user_not_found"
+
+
+def test_config_flow_helper_branches(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cover helper branches used by config/options flow schema setup."""
+    _install_homeassistant_stubs(monkeypatch)
+    _install_voluptuous_stub(monkeypatch)
+    module = _import_fresh("custom_components.ha_simple_mcp.config_flow")
+
+    assert module._scope_csv_default(123) == ""
+    schema = module._build_settings_schema(
+        users=["owner"],
+        defaults={module.CONF_TARGET_USER: "missing"},
+    )
+    target_user_key = next(
+        key
+        for key in schema.schema
+        if isinstance(key, tuple) and key[0] == "required" and key[1] == module.CONF_TARGET_USER
+    )
+    assert target_user_key[2] == "owner"
+
+    entry = SimpleNamespace(data={}, options={})
+    options_flow = module.HaSimpleMcpConfigFlow.async_get_options_flow(entry)
+    assert isinstance(options_flow, module.HaSimpleMcpOptionsFlow)
+
+
+@pytest.mark.asyncio
+async def test_options_flow_fallback_owner_without_users(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cover options flow user fallback when auth has no active users."""
+    _install_homeassistant_stubs(monkeypatch)
+    _install_voluptuous_stub(monkeypatch)
+    module = _import_fresh("custom_components.ha_simple_mcp.config_flow")
+
+    flow = module.HaSimpleMcpOptionsFlow(SimpleNamespace(data={}, options={}))
+    flow.hass = SimpleNamespace(auth=SimpleNamespace(async_get_users=AsyncMock(return_value=[])))
+
+    form = await flow.async_step_init()
     target_user_key = next(
         key
         for key in form["data_schema"].schema
