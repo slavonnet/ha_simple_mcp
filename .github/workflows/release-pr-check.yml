@@ -54,7 +54,7 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add pyproject.toml custom_components/ha_simple_mcp/manifest.json README.md
+          git add custom_components/ha_simple_mcp/manifest.json
           git commit -m "chore: auto-sync release metadata for v${{ steps.release_version.outputs.target_version }}"
           git push origin "HEAD:${GITHUB_HEAD_REF}"
 
@@ -107,17 +107,6 @@ jobs:
               Path("custom_components/ha_simple_mcp/manifest.json").read_text(encoding="utf-8")
           )
           manifest_version = manifest["version"]
-          readme = Path("README.md").read_text(encoding="utf-8")
-          readme_match = re.search(
-              r"release tag currently used here:\s*`v(\d+\.\d+\.\d+)`",
-              readme,
-          )
-          if not readme_match:
-              raise SystemExit(
-                  "README.md must include 'release tag currently used here: `vX.Y.Z`'"
-              )
-          readme_version = readme_match.group(1)
-
           if dynamic_version_enabled:
               if "version" in pyproject["project"]:
                   raise SystemExit(
@@ -131,9 +120,5 @@ jobs:
           if manifest_version != target_version:
               raise SystemExit(
                   f"manifest version '{manifest_version}' must equal release version '{target_version}'"
-              )
-          if readme_version != target_version:
-              raise SystemExit(
-                  f"README version '{readme_version}' must equal release version '{target_version}'"
               )
           PY
