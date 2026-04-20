@@ -78,7 +78,6 @@ def test_ha_container_ui_add_integration_and_change_settings() -> None:
         _wait_hacs_running(access_token, timeout_seconds=300)
         repository_id = _hacs_add_custom_repository(access_token)
         _hacs_install_repository(access_token, repository_id)
-        _normalize_hacs_installed_layout(container_id)
         _assert_container_file_exists(
             container_id,
             "/config/custom_components/ha_simple_mcp/manifest.json",
@@ -301,7 +300,7 @@ def _inject_hacs_config_entry(container_id: str, *, github_token: str) -> None:
         if not isinstance(entries, list):
             raise AssertionError("core.config_entries payload has unexpected entries structure")
 
-        now = dt.datetime.now(dt.timezone.utc).isoformat()
+        now = dt.datetime.now(dt.UTC).isoformat()
         existing = next(
             (
                 entry
@@ -519,26 +518,6 @@ async def _async_hacs_ws_command(
 def _assert_container_file_exists(container_id: str, path: str) -> None:
     """Assert regular file exists inside Home Assistant container."""
     _run_command(["docker", "exec", container_id, "test", "-f", path])
-
-
-def _normalize_hacs_installed_layout(container_id: str) -> None:
-    """Flatten nested component directory from release zip layout when needed."""
-    _run_command(
-        [
-            "docker",
-            "exec",
-            container_id,
-            "sh",
-            "-c",
-            (
-                "if [ -d /config/custom_components/ha_simple_mcp/ha_simple_mcp ]; then "
-                "mv /config/custom_components/ha_simple_mcp/ha_simple_mcp/* "
-                "/config/custom_components/ha_simple_mcp/ && "
-                "rmdir /config/custom_components/ha_simple_mcp/ha_simple_mcp; "
-                "fi"
-            ),
-        ]
-    )
 
 
 def _create_integration_entry(access_token: str) -> str:
