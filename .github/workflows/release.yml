@@ -153,10 +153,10 @@ jobs:
       - name: Build HACS release archive
         run: |
           mkdir -p dist
-          mkdir -p dist/custom_components
-          cp -r custom_components/ha_simple_mcp dist/custom_components/ha_simple_mcp
-          cd dist
-          zip -r "ha_simple_mcp.zip" "custom_components"
+          mkdir -p dist/release_root
+          cp -a custom_components/ha_simple_mcp/. dist/release_root/
+          cd dist/release_root
+          zip -r "../ha_simple_mcp.zip" .
 
       - name: Publish HACS archive as release asset
         uses: softprops/action-gh-release@v2
