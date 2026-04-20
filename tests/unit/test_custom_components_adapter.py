@@ -191,11 +191,155 @@ def test_compatibility_reexports() -> None:
     assert compat_proxy.ProxyError is core_proxy.ProxyError
     assert compat_proxy._build_request is core_proxy.build_request
     assert compat_schema.SchemaCache is core_schema.SchemaCache
-    assert compat_server.McpHttpServer is core_server.McpHttpServer
+    assert issubclass(compat_server.McpHttpServer, core_server.McpHttpServer)
     assert compat_server.normalize_scopes is core_server.normalize_scopes
     assert compat_validation.ValidationError is core_validation.ValidationError
     assert compat_validation.matches_type is core_validation.matches_type
     assert compat_validation.validate_call is core_validation.validate_call
+
+
+@pytest.mark.asyncio
+async def test_adapter_server_compacts_tools_payload() -> None:
+    """Ensure adapter server returns compact /mcp/tools metadata."""
+    from aiohttp.test_utils import TestClient, TestServer
+    from ha_api_mcp.models import ApiEndpoint, McpSettings
+    from ha_api_mcp.schema import SchemaCache
+
+    from custom_components.ha_simple_mcp.server import McpHttpServer
+
+    class _Catalog:
+        async def discover(self):
+            return [
+                ApiEndpoint(
+                    method="POST",
+                    path="/api/backup/upload",
+                    description="Call Home Assistant endpoint POST /api/backup/upload via handle.",
+                    returns_description="Raw Home Assistant JSON response.",
+                    parameters=(),
+                    scope="ha.api.post.api.backup.upload",
+                ),
+                ApiEndpoint(
+                    method="GET",
+                    path="/api/config",
+                    description="Custom readable description",
+                    returns_description="Config payload",
+                    parameters=(),
+                    scope="ha.api.get.api.config",
+                ),
+            ]
+
+        async def get_by_tool_name(self, tool_name: str):
+            return None
+
+    settings = McpSettings(
+        bind_address="",
+        port=0,
+        auth_token="",
+        target_user="owner",
+        read_only=False,
+        scope_allowlist=(),
+        schema_cache_ttl=60,
+        timeout=10,
+        base_url="http://ha.local:8123",
+    )
+    server = McpHttpServer(
+        settings=settings,
+        catalog=_Catalog(),
+        proxy=AsyncMock(),
+        schema_cache=SchemaCache(ttl_seconds=60),
+    )
+    ts = TestServer(server.app)
+    client = TestClient(ts)
+    await client.start_server()
+    try:
+        resp = await client.get("/mcp/tools")
+        assert resp.status == 200
+        data = await resp.json()
+    finally:
+        await client.close()
+
+    first = data["tools"][0]
+    assert "x-ha-endpoint" not in first
+    assert "description" not in first
+    assert first["x-scope"] == "post.backup.upload"
+
+    second = data["tools"][1]
+    assert second["description"] == "Custom readable description"
+    assert second["x-scope"] == "get.config"
+
+
+@pytest.mark.asyncio
+async def test_adapter_server_tools_unauthorized() -> None:
+    """Ensure compact tools endpoint keeps auth behavior."""
+    from aiohttp.test_utils import TestClient, TestServer
+    from ha_api_mcp.models import McpSettings
+    from ha_api_mcp.schema import SchemaCache
+
+    from custom_components.ha_simple_mcp.server import McpHttpServer
+
+    class _Catalog:
+        async def discover(self):
+            return []
+
+        async def get_by_tool_name(self, tool_name: str):
+            return None
+
+    settings = McpSettings(
+        bind_address="",
+        port=0,
+        auth_token="secret",
+        target_user="owner",
+        read_only=False,
+        scope_allowlist=(),
+        schema_cache_ttl=60,
+        timeout=10,
+        base_url="http://ha.local:8123",
+    )
+    server = McpHttpServer(
+        settings=settings,
+        catalog=_Catalog(),
+        proxy=AsyncMock(),
+        schema_cache=SchemaCache(ttl_seconds=60),
+    )
+    ts = TestServer(server.app)
+    client = TestClient(ts)
+    await client.start_server()
+    try:
+        unauthorized = await client.get("/mcp/tools")
+        assert unauthorized.status == 401
+        assert await unauthorized.json() == {"error": "unauthorized"}
+    finally:
+        await client.close()
+
+
+def test_adapter_scope_helpers_cover_branches() -> None:
+    """Cover compact scope helpers for fallback and prefix paths."""
+    from custom_components.ha_simple_mcp.server import (
+        _compact_tool,
+        _extract_compact_scope,
+        _shorten_scope,
+    )
+
+    assert _extract_compact_scope({}) == ""
+    assert _extract_compact_scope({"x-ha-endpoint": "bad"}) == ""
+    assert _extract_compact_scope({"x-ha-endpoint": {"scope": None}}) == ""
+    assert _extract_compact_scope(
+        {"x-ha-endpoint": {"scope": "ha.api.post.api.backup.upload"}}
+    ) == "post.backup.upload"
+    assert _extract_compact_scope({"x-ha-endpoint": {"scope": "ha.api.get.config"}}) == "get.config"
+
+    assert _shorten_scope("") == ""
+    assert _shorten_scope("custom.scope") == "custom.scope"
+    assert _shorten_scope("ha.api.get.api.states") == "get.states"
+
+    compact = _compact_tool(
+        {
+            "name": "ha_get_root",
+            "description": "Custom readable description",
+            "inputSchema": {"type": "object"},
+        }
+    )
+    assert "x-scope" not in compact
 
 
 @pytest.mark.asyncio

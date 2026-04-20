@@ -8,7 +8,6 @@ from ha_api_mcp.catalog import ApiCatalog
 from ha_api_mcp.models import McpSettings
 from ha_api_mcp.proxy import ApiProxy
 from ha_api_mcp.schema import SchemaCache
-from ha_api_mcp.server import McpHttpServer
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
@@ -27,6 +26,7 @@ from .const import (
     DEFAULT_SCHEMA_CACHE_TTL,
     DEFAULT_TIMEOUT,
 )
+from .server import McpHttpServer
 
 
 @dataclass(slots=True)
