@@ -58,8 +58,8 @@ This repository uses a **release-via-PR** workflow.
 
    Tag push triggers `Release` workflow:
    - validates that tag matches `manifest.json` version
-   - builds `dist/ha_simple_mcp.zip` artifact for HACS release
-    with root folder `custom_components/ha_simple_mcp`
+  - builds `dist/ha_simple_mcp.zip` artifact for HACS release
+    with integration files in archive root (`manifest.json`, `config_flow.py`, etc.)
    - publishes `ha_simple_mcp.zip` as GitHub Release asset
 
 7. If release asset is missing, re-run publication manually:
