@@ -11,8 +11,6 @@ from ha_api_mcp.schema import SchemaCache
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .server import McpHttpServer
-
 from .const import (
     CONF_BIND_ADDRESS,
     CONF_PORT,
@@ -28,6 +26,7 @@ from .const import (
     DEFAULT_SCHEMA_CACHE_TTL,
     DEFAULT_TIMEOUT,
 )
+from .server import McpHttpServer
 
 
 @dataclass(slots=True)

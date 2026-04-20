@@ -269,6 +269,80 @@ async def test_adapter_server_compacts_tools_payload() -> None:
 
 
 @pytest.mark.asyncio
+async def test_adapter_server_tools_unauthorized() -> None:
+    """Ensure compact tools endpoint keeps auth behavior."""
+    from aiohttp.test_utils import TestClient, TestServer
+    from ha_api_mcp.models import McpSettings
+    from ha_api_mcp.schema import SchemaCache
+
+    from custom_components.ha_simple_mcp.server import McpHttpServer
+
+    class _Catalog:
+        async def discover(self):
+            return []
+
+        async def get_by_tool_name(self, tool_name: str):
+            return None
+
+    settings = McpSettings(
+        bind_address="",
+        port=0,
+        auth_token="secret",
+        target_user="owner",
+        read_only=False,
+        scope_allowlist=(),
+        schema_cache_ttl=60,
+        timeout=10,
+        base_url="http://ha.local:8123",
+    )
+    server = McpHttpServer(
+        settings=settings,
+        catalog=_Catalog(),
+        proxy=AsyncMock(),
+        schema_cache=SchemaCache(ttl_seconds=60),
+    )
+    ts = TestServer(server.app)
+    client = TestClient(ts)
+    await client.start_server()
+    try:
+        unauthorized = await client.get("/mcp/tools")
+        assert unauthorized.status == 401
+        assert await unauthorized.json() == {"error": "unauthorized"}
+    finally:
+        await client.close()
+
+
+def test_adapter_scope_helpers_cover_branches() -> None:
+    """Cover compact scope helpers for fallback and prefix paths."""
+    from custom_components.ha_simple_mcp.server import (
+        _compact_tool,
+        _extract_compact_scope,
+        _shorten_scope,
+    )
+
+    assert _extract_compact_scope({}) == ""
+    assert _extract_compact_scope({"x-ha-endpoint": "bad"}) == ""
+    assert _extract_compact_scope({"x-ha-endpoint": {"scope": None}}) == ""
+    assert _extract_compact_scope(
+        {"x-ha-endpoint": {"scope": "ha.api.post.api.backup.upload"}}
+    ) == "post.backup.upload"
+    assert _extract_compact_scope({"x-ha-endpoint": {"scope": "ha.api.get.config"}}) == "get.config"
+
+    assert _shorten_scope("") == ""
+    assert _shorten_scope("custom.scope") == "custom.scope"
+    assert _shorten_scope("ha.api.get.api.states") == "get.states"
+
+    compact = _compact_tool(
+        {
+            "name": "ha_get_root",
+            "description": "Custom readable description",
+            "inputSchema": {"type": "object"},
+        }
+    )
+    assert "x-scope" not in compact
+
+
+@pytest.mark.asyncio
 async def test_runtime_data_builds_settings_and_lifecycle(monkeypatch: pytest.MonkeyPatch) -> None:
     """Build runtime from entry and verify start/stop delegation."""
     _install_homeassistant_stubs(monkeypatch)
