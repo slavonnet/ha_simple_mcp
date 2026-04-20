@@ -8,9 +8,10 @@ from ha_api_mcp.catalog import ApiCatalog
 from ha_api_mcp.models import McpSettings
 from ha_api_mcp.proxy import ApiProxy
 from ha_api_mcp.schema import SchemaCache
-from ha_api_mcp.server import McpHttpServer
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+
+from .server import McpHttpServer
 
 from .const import (
     CONF_BIND_ADDRESS,
