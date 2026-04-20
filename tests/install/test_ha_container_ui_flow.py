@@ -363,7 +363,18 @@ def _wait_hacs_running(access_token: str, *, timeout_seconds: int) -> None:
             continue
         if isinstance(info, dict):
             stage = str(info.get("stage", "")).lower()
-            if stage == "running":
+            startup = bool(info.get("startup", True))
+            has_pending_tasks = bool(info.get("has_pending_tasks", True))
+            disabled_reason = info.get("disabled_reason")
+            categories = info.get("categories")
+            if (
+                stage == "running"
+                and startup is False
+                and has_pending_tasks is False
+                and disabled_reason in (None, "", "None")
+                and isinstance(categories, (list, tuple, set))
+                and "integration" in categories
+            ):
                 return
         time.sleep(2)
     raise AssertionError("HACS integration did not reach running stage")
