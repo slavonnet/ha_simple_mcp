@@ -318,7 +318,7 @@ def _inject_hacs_config_entry(container_id: str, *, github_token: str) -> None:
         if github_token.strip():
             hacs_data["token"] = github_token
 
-        hacs_entry = {
+        hacs_entry: dict[str, Any] = {
             "created_at": now,
             "data": hacs_data,
             "disabled_by": None,
